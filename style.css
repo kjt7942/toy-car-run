@@ -1,0 +1,312 @@
+:root {
+  --bg-sky: #A3D8F4;
+  --bg-road: #3A3D40;
+  --bg-grass: #7ED957;
+  --primary-color: #FFDE59;
+  --accent-color: #FF5757;
+  --white: #FFFFFF;
+  --dark: #2F3640;
+  --font-family: 'Jua', 'Nunito', sans-serif;
+  --radius-lg: 24px;
+  --radius-md: 16px;
+  --shadow-sm: 0 4px 6px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 12px 30px rgba(0, 0, 0, 0.15);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: #1E272E;
+  font-family: var(--font-family);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* 게임을 감싸는 전체 반응형 컨테이너 */
+#game-container {
+  position: relative;
+  width: 100%;
+  max-width: 480px; /* 모바일 세로 화면 비율 유지 */
+  height: 100%;
+  max-height: 850px;
+  background: var(--bg-sky);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  border-radius: 0;
+}
+
+@media (min-width: 480px) {
+  #game-container {
+    border-radius: var(--radius-lg);
+    border: 8px solid #2F3640;
+  }
+}
+
+/* 게임 캔버스 */
+#gameCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* HUD (점수 & 하트 라이프) */
+#hud {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  pointer-events: none; /* 터치 이벤트 관통 */
+  z-index: 10;
+}
+
+.hud-item {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  border: 3px solid var(--dark);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.score-container {
+  min-width: 90px;
+}
+
+.hud-label {
+  font-size: 0.8rem;
+  color: #718093;
+  font-weight: 700;
+  letter-spacing: 1px;
+  margin-bottom: 2px;
+}
+
+.hud-value {
+  font-size: 1.4rem;
+  color: var(--dark);
+  font-weight: 900;
+}
+
+#heartContainer {
+  display: flex;
+  gap: 4px;
+  font-size: 1.4rem;
+}
+
+/* 오버레이 스크린 (시작, 게임오버) */
+.overlay-screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(47, 54, 64, 0.75);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 20;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.overlay-screen.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.screen-content {
+  background: var(--white);
+  border: 6px solid var(--dark);
+  border-radius: var(--radius-lg);
+  padding: 30px 24px;
+  width: 85%;
+  max-width: 380px;
+  text-align: center;
+  box-shadow: var(--shadow-lg);
+  transform: scale(0.8);
+  transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.overlay-screen.active .screen-content {
+  transform: scale(1);
+}
+
+.logo-area {
+  margin-bottom: 15px;
+  position: relative;
+}
+
+.emoji-logo {
+  font-size: 4rem;
+  display: inline-block;
+  animation: float 2.5s ease-in-out infinite;
+}
+
+.game-title {
+  font-size: 2.2rem;
+  color: var(--dark);
+  margin-top: 8px;
+  text-shadow: 2px 2px 0px var(--primary-color);
+}
+
+.text-danger {
+  color: var(--accent-color);
+  text-shadow: 2px 2px 0px var(--primary-color);
+}
+
+.game-subtitle {
+  font-size: 1.1rem;
+  color: #718093;
+  margin-bottom: 24px;
+}
+
+.instructions-box {
+  background: #F5F6FA;
+  border: 3px solid var(--dark);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  font-size: 0.95rem;
+  color: var(--dark);
+  text-align: left;
+  line-height: 1.6;
+  margin-bottom: 24px;
+}
+
+.score-board {
+  background: #F5F6FA;
+  border: 3px solid var(--dark);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  margin-bottom: 24px;
+  display: flex;
+  justify-content: space-around;
+}
+
+.score-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.result-label {
+  font-size: 0.9rem;
+  color: #718093;
+  margin-bottom: 4px;
+}
+
+.result-val {
+  font-size: 1.8rem;
+  color: var(--dark);
+  font-weight: 900;
+}
+
+/* 버튼 디자인 */
+.btn-primary {
+  background: var(--primary-color);
+  color: var(--dark);
+  border: 4px solid var(--dark);
+  border-radius: var(--radius-md);
+  padding: 14px 28px;
+  font-size: 1.3rem;
+  font-family: var(--font-family);
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0 6px 0px var(--dark);
+  transition: all 0.1s ease;
+  width: 100%;
+}
+
+.btn-primary:active {
+  transform: translateY(4px);
+  box-shadow: 0 2px 0px var(--dark);
+}
+
+/* 모바일 터치 컨트롤 (좌우 터치 패널) */
+#touchControls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 25%; /* 화면의 아래쪽 1/4 영역 */
+  display: flex;
+  z-index: 15;
+}
+
+.touch-zone {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  /* 모바일 롱프레스 시 반투명한 터치 피드백 방지 */
+  -webkit-tap-highlight-color: transparent; 
+}
+
+/* 은은한 화살표 비주얼 데코레이션 */
+.touch-btn-visual {
+  width: 70px;
+  height: 70px;
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border: 3px solid rgba(255, 255, 255, 0.4);
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  font-size: 1.8rem;
+  font-weight: 900;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  transition: all 0.15s ease;
+  pointer-events: none; /* 부모 존이 터치를 받고 이 비주얼은 관통함 */
+  opacity: 0.6;
+}
+
+/* 터치 영역 터치 시 시각적 피드백 */
+.touch-zone:active .touch-btn-visual {
+  background: var(--primary-color);
+  border-color: var(--dark);
+  color: var(--dark);
+  transform: scale(1.15);
+  opacity: 1;
+  box-shadow: 0 0 15px var(--primary-color);
+}
+
+/* 둥둥 뜨는 플로팅 애니메이션 */
+@keyframes float {
+  0% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-10px) rotate(5deg); }
+  100% { transform: translateY(0px) rotate(0deg); }
+}
+
+/* 바운스 애니메이션 */
+.btn-bounce {
+  animation: bounce 2s infinite;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
