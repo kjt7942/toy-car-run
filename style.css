@@ -37,11 +37,11 @@ html, body {
 #game-container {
   position: relative;
   width: 100%;
-  max-width: 480px; /* 모바일 세로 화면 비율 유지 */
+  max-width: 480px; 
   height: 100%;
   max-height: 850px;
   background: var(--bg-sky);
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.45);
   overflow: hidden;
   border-radius: 0;
 }
@@ -69,17 +69,17 @@ html, body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  pointer-events: none; /* 터치 이벤트 관통 */
+  pointer-events: none; 
   z-index: 10;
 }
 
 .hud-item {
   background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  padding: 8px 16px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 8px 18px;
   border-radius: var(--radius-md);
-  border: 3px solid var(--dark);
+  border: 3.5px solid var(--dark);
   box-shadow: var(--shadow-sm);
   display: flex;
   flex-direction: column;
@@ -87,27 +87,29 @@ html, body {
 }
 
 .score-container {
-  min-width: 90px;
+  min-width: 100px;
 }
 
 .hud-label {
-  font-size: 0.8rem;
-  color: #718093;
-  font-weight: 700;
-  letter-spacing: 1px;
+  font-size: 0.85rem;
+  color: #57606F;
+  font-weight: 900;
+  letter-spacing: 1.5px;
   margin-bottom: 2px;
 }
 
 .hud-value {
-  font-size: 1.4rem;
+  font-size: 1.5rem;
   color: var(--dark);
   font-weight: 900;
+  text-shadow: 1px 1px 0px rgba(0,0,0,0.1);
 }
 
 #heartContainer {
   display: flex;
-  gap: 4px;
-  font-size: 1.4rem;
+  gap: 6px;
+  font-size: 1.5rem;
+  filter: drop-shadow(1px 2px 0px rgba(0,0,0,0.15));
 }
 
 /* 오버레이 스크린 (시작, 게임오버) */
@@ -117,7 +119,7 @@ html, body {
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(47, 54, 64, 0.75);
+  background: rgba(47, 54, 64, 0.78);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   display: flex;
@@ -138,7 +140,7 @@ html, body {
   background: var(--white);
   border: 6px solid var(--dark);
   border-radius: var(--radius-lg);
-  padding: 30px 24px;
+  padding: 35px 24px;
   width: 85%;
   max-width: 380px;
   text-align: center;
@@ -152,54 +154,59 @@ html, body {
 }
 
 .logo-area {
-  margin-bottom: 15px;
+  margin-bottom: 18px;
   position: relative;
 }
 
 .emoji-logo {
-  font-size: 4rem;
+  font-size: 4.5rem;
   display: inline-block;
   animation: float 2.5s ease-in-out infinite;
+  filter: drop-shadow(0px 8px 10px rgba(0,0,0,0.15));
 }
 
 .game-title {
-  font-size: 2.2rem;
+  font-size: 2.3rem;
   color: var(--dark);
   margin-top: 8px;
-  text-shadow: 2px 2px 0px var(--primary-color);
+  text-shadow: 3px 3px 0px var(--primary-color);
+  letter-spacing: 0.5px;
 }
 
 .text-danger {
   color: var(--accent-color);
-  text-shadow: 2px 2px 0px var(--primary-color);
+  text-shadow: 3px 3px 0px var(--primary-color);
 }
 
 .game-subtitle {
   font-size: 1.1rem;
-  color: #718093;
+  color: #747D8C;
   margin-bottom: 24px;
+  font-weight: 700;
 }
 
 .instructions-box {
-  background: #F5F6FA;
+  background: #F1F2F6;
   border: 3px solid var(--dark);
   border-radius: var(--radius-md);
-  padding: 12px;
+  padding: 14px;
   font-size: 0.95rem;
   color: var(--dark);
   text-align: left;
-  line-height: 1.6;
+  line-height: 1.7;
   margin-bottom: 24px;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
 }
 
 .score-board {
-  background: #F5F6FA;
+  background: #F1F2F6;
   border: 3px solid var(--dark);
   border-radius: var(--radius-md);
   padding: 16px;
   margin-bottom: 24px;
   display: flex;
   justify-content: space-around;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
 }
 
 .score-result {
@@ -210,12 +217,13 @@ html, body {
 
 .result-label {
   font-size: 0.9rem;
-  color: #718093;
+  color: #747D8C;
   margin-bottom: 4px;
+  font-weight: 700;
 }
 
 .result-val {
-  font-size: 1.8rem;
+  font-size: 1.9rem;
   color: var(--dark);
   font-weight: 900;
 }
@@ -227,7 +235,7 @@ html, body {
   border: 4px solid var(--dark);
   border-radius: var(--radius-md);
   padding: 14px 28px;
-  font-size: 1.3rem;
+  font-size: 1.35rem;
   font-family: var(--font-family);
   font-weight: bold;
   cursor: pointer;
@@ -247,7 +255,7 @@ html, body {
   bottom: 0;
   left: 0;
   width: 100%;
-  height: 25%; /* 화면의 아래쪽 1/4 영역 */
+  height: 25%; 
   display: flex;
   z-index: 15;
 }
@@ -259,29 +267,28 @@ html, body {
   justify-content: center;
   align-items: center;
   cursor: pointer;
-  /* 모바일 롱프레스 시 반투명한 터치 피드백 방지 */
   -webkit-tap-highlight-color: transparent; 
 }
 
 /* 은은한 화살표 비주얼 데코레이션 */
 .touch-btn-visual {
-  width: 70px;
-  height: 70px;
-  background: rgba(255, 255, 255, 0.25);
+  width: 75px;
+  height: 75px;
+  background: rgba(255, 255, 255, 0.28);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
-  border: 3px solid rgba(255, 255, 255, 0.4);
+  border: 3px solid rgba(255, 255, 255, 0.5);
   border-radius: 50%;
   display: flex;
   justify-content: center;
   align-items: center;
   color: white;
-  font-size: 1.8rem;
+  font-size: 1.9rem;
   font-weight: 900;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   transition: all 0.15s ease;
-  pointer-events: none; /* 부모 존이 터치를 받고 이 비주얼은 관통함 */
-  opacity: 0.6;
+  pointer-events: none; 
+  opacity: 0.65;
 }
 
 /* 터치 영역 터치 시 시각적 피드백 */
@@ -289,9 +296,9 @@ html, body {
   background: var(--primary-color);
   border-color: var(--dark);
   color: var(--dark);
-  transform: scale(1.15);
+  transform: scale(1.18);
   opacity: 1;
-  box-shadow: 0 0 15px var(--primary-color);
+  box-shadow: 0 0 18px var(--primary-color);
 }
 
 /* 둥둥 뜨는 플로팅 애니메이션 */

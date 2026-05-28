@@ -28,22 +28,36 @@ let keys = {};
 let touchLeftPressed = false;
 let touchRightPressed = false;
 
-// 게임 밸런스 및 물리 상수 (체감 난이도 완화 튜닝)
+// 게임 밸런스 및 물리 상수
 let gameSpeed = 3.2;
-const BASE_SPEED = 3.2;       // 초반 주행 속도 하향 (기존 5 -> 3.2)
-const MAX_SPEED = 8.5;        // 최고 주행 속도 하향 (기존 12 -> 8.5)
-const SPEED_INC = 0.0002;      // 속도 상승 강도 완만화 (기존 0.0005 -> 0.0002)
+const BASE_SPEED = 3.2;       
+const MAX_SPEED = 9.5;        
+const SPEED_INC = 0.0003;      
 
 // 화면 흔들림(Screen Shake)
 let shakeTime = 0;
 let shakeAmount = 0;
 
-// 파티클 (충돌 이펙트)
+// 파티클 시스템
 let particles = [];
+let dustParticles = [];
+let speedLines = [];
 
-// 무적 타임 관련
+// 아이템 및 장애물 상태 변수
 let invincibleTime = 0;
 const INVINCIBLE_DURATION = 90; // 프레임 기준 (약 1.5초)
+
+let activeShield = false; // 보호막 활성화 여부
+let boosterTime = 0;      // 부스터 피버 잔여 시간 (프레임)
+let magnetTime = 0;       // 자석 활성화 잔여 시간 (프레임)
+const BOOSTER_DURATION = 240; // 4초
+const MAGNET_DURATION = 360;  // 6초
+
+// 화면 방해 오일 효과 리스트
+let screenOils = [];
+
+// 통통 튀며 올라가는 플로팅 텍스트 리스트
+let floatingTexts = [];
 
 // 플레이어 캐릭터 (자동차)
 const car = {
@@ -52,10 +66,11 @@ const car = {
   width: 36,
   height: 60,
   vx: 0,
-  acc: 0.95,      // 좌우 반응 속도(가속도) 상향 (기존 0.8 -> 0.95)
-  friction: 0.80,  // 미끄러지는 마찰 제어력 개선 (기존 0.85 -> 0.80)
-  maxVx: 7.2,      // 최대 좌우 조작 속도 증가 (기존 6.5 -> 7.2)
-  angle: 0        // 자동차 꺾임 각도
+  acc: 0.95,      
+  friction: 0.80,  
+  maxVx: 7.2,      
+  angle: 0,
+  wheelRotation: 0 // 바퀴 회전 비주얼 연출용
 };
 
 // 도로 디자인 변수
@@ -65,28 +80,23 @@ let roadOffset = 0;
 
 // 도로 사이드 오브젝트 (나무, 꽃 등 데코레이션)
 let sceneryObjects = [];
-const SCENERY_TYPES = ['tree', 'flower', 'cloud'];
 
-// 장애물 목록
+// 장애물 및 아이템 목록
 let obstacles = [];
-const OBSTACLE_TYPES = ['cone', 'rock'];
-let obstacleSpawnTimer = 0;
-let obstacleSpawnInterval = 140; // 프레임당 스폰 대기 시간 (초반 여유 주기, 기존 100 -> 140)
+let gameItems = [];
 
-// 1. 캔버스 해상도 조절 (레티나 디바이스 대응 및 비율 유지)
+let spawnTimer = 0;
+let spawnInterval = 100; // 프레임당 스폰 주기
+
+// 1. 캔버스 해상도 조절
 function resizeCanvas() {
-  const container = document.getElementById('game-container');
-  const rect = container.getBoundingClientRect();
-  
-  // 브라우저 화면 비율에 맞추어 Canvas 실제 픽셀 조정
   canvas.width = GAME_WIDTH;
   canvas.height = GAME_HEIGHT;
 }
 
-// 2. 키보드 입력 핸들링 (PC)
+// 2. 키보드 입력 핸들링
 window.addEventListener('keydown', (e) => {
   keys[e.key] = true;
-  // 스페이스바나 위아래 키로 인한 화면 스크롤 방지
   if (['ArrowUp', 'ArrowDown', ' ', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
     e.preventDefault();
   }
@@ -96,7 +106,6 @@ window.addEventListener('keyup', (e) => {
 });
 
 // 3. 모바일 터치 이벤트 핸들링
-// 터치 시작
 touchLeft.addEventListener('touchstart', (e) => {
   e.preventDefault();
   touchLeftPressed = true;
@@ -107,7 +116,6 @@ touchRight.addEventListener('touchstart', (e) => {
   touchRightPressed = true;
 }, { passive: false });
 
-// 터치 종료
 touchLeft.addEventListener('touchend', (e) => {
   e.preventDefault();
   touchLeftPressed = false;
@@ -118,7 +126,6 @@ touchRight.addEventListener('touchend', (e) => {
   touchRightPressed = false;
 }, { passive: false });
 
-// 마우스 클릭으로도 테스트할 수 있게 마우스 이벤트 지원
 touchLeft.addEventListener('mousedown', () => touchLeftPressed = true);
 touchLeft.addEventListener('mouseup', () => touchLeftPressed = false);
 touchLeft.addEventListener('mouseleave', () => touchLeftPressed = false);
@@ -128,11 +135,11 @@ touchRight.addEventListener('mouseup', () => touchRightPressed = false);
 touchRight.addEventListener('mouseleave', () => touchRightPressed = false);
 
 
-// --- [그리기 보조 함수군 - 귀여운 벡터 스타일 벡터 드로잉] ---
+// --- [그리기 보조 함수군 - 벡터 그래픽 고도화] ---
 
 // 1) 귀여운 구름 그리기
 function drawCloud(ctx, x, y, size) {
-  ctx.fillStyle = '#FFFFFF';
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
   ctx.beginPath();
   ctx.arc(x, y, size, 0, Math.PI * 2);
   ctx.arc(x + size * 0.8, y - size * 0.3, size * 0.8, 0, Math.PI * 2);
@@ -144,24 +151,39 @@ function drawCloud(ctx, x, y, size) {
 
 // 2) 귀여운 둥글둥글 나무 그리기
 function drawTree(ctx, x, y) {
+  // 나무 그림자
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  ctx.beginPath();
+  ctx.ellipse(x, y + 18, 12, 5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
   // 나무 기둥
   ctx.fillStyle = '#8B5A2B';
   ctx.fillRect(x - 5, y, 10, 20);
   
-  // 나무 나뭇잎 (구름 모양)
+  // 나무 나뭇잎 (풍성하게 레이어 추가)
+  ctx.fillStyle = '#26AE60';
+  ctx.beginPath();
+  ctx.arc(x, y - 8, 17, 0, Math.PI * 2);
+  ctx.arc(x - 10, y - 16, 13, 0, Math.PI * 2);
+  ctx.arc(x + 10, y - 16, 13, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.fill();
+
   ctx.fillStyle = '#2ECC71';
   ctx.beginPath();
-  ctx.arc(x, y - 8, 16, 0, Math.PI * 2);
-  ctx.arc(x - 10, y - 16, 12, 0, Math.PI * 2);
-  ctx.arc(x + 10, y - 16, 12, 0, Math.PI * 2);
+  ctx.arc(x, y - 10, 13, 0, Math.PI * 2);
+  ctx.arc(x - 6, y - 16, 10, 0, Math.PI * 2);
+  ctx.arc(x + 6, y - 16, 10, 0, Math.PI * 2);
   ctx.closePath();
   ctx.fill();
   
-  // 볼터치 같은 노란 사과 조그맣게 포인트
+  // 빨간 미니 사과 포인트
   ctx.fillStyle = '#FF7675';
   ctx.beginPath();
-  ctx.arc(x - 5, y - 12, 3, 0, Math.PI * 2);
-  ctx.arc(x + 6, y - 6, 3, 0, Math.PI * 2);
+  ctx.arc(x - 6, y - 10, 3, 0, Math.PI * 2);
+  ctx.arc(x + 7, y - 5, 3, 0, Math.PI * 2);
+  ctx.arc(x + 1, y - 18, 3.5, 0, Math.PI * 2);
   ctx.fill();
 }
 
@@ -184,7 +206,7 @@ function drawFlower(ctx, x, y) {
     const px = x + Math.cos(angle) * radius;
     const py = y + Math.sin(angle) * radius;
     ctx.beginPath();
-    ctx.arc(px, py, 4, 0, Math.PI * 2);
+    ctx.arc(px, py, 4.5, 0, Math.PI * 2);
     ctx.fill();
   }
   
@@ -195,49 +217,110 @@ function drawFlower(ctx, x, y) {
   ctx.fill();
 }
 
-// 4) 플레이어 자동차 그리기
+// 풍차 데코레이션 그리기
+function drawWindmill(ctx, x, y, rot) {
+  // 지지대
+  ctx.fillStyle = '#ECEFF1';
+  ctx.strokeStyle = '#2F3640';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(x - 12, y + 30);
+  ctx.lineTo(x - 4, y - 10);
+  ctx.lineTo(x + 4, y - 10);
+  ctx.lineTo(x + 12, y + 30);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // 날개 중심
+  ctx.fillStyle = '#78909C';
+  ctx.beginPath();
+  ctx.arc(x, y - 10, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // 회전하는 4개 날개
+  ctx.save();
+  ctx.translate(x, y - 10);
+  ctx.rotate(rot);
+  ctx.fillStyle = '#FF7675';
+  ctx.strokeStyle = '#2F3640';
+  ctx.lineWidth = 2.5;
+  for (let i = 0; i < 4; i++) {
+    ctx.rotate(Math.PI / 2);
+    ctx.beginPath();
+    ctx.roundRect(-3, 0, 6, 26, 3);
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// 4) 플레이어 자동차 그리기 (바퀴 굴러감, 스크롤 매칭 배기 가스)
 function drawPlayer() {
-  // 무적 모드일 때 깜빡거리게 연출
   if (invincibleTime > 0 && Math.floor(invincibleTime / 4) % 2 === 0) {
     return;
   }
 
   ctx.save();
   ctx.translate(car.x, car.y);
-  
-  // 부드러운 꺾임 각도 반영
   ctx.rotate(car.angle);
 
-  // 그림자 효과
-  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  // 1. 그림자 효과 (부스터 상태일 때 파랗게 빛남)
+  if (boosterTime > 0) {
+    ctx.fillStyle = 'rgba(9, 132, 227, 0.4)';
+    ctx.shadowColor = '#00DEC9';
+    ctx.shadowBlur = 15;
+  } else {
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+  }
   ctx.beginPath();
   ctx.roundRect(-car.width / 2 - 2, -car.height / 2 + 5, car.width + 4, car.height + 2, 10);
   ctx.fill();
+  ctx.shadowBlur = 0; // 섀도 리셋
 
-  // 1. 바퀴 4개 그리기 (귀엽게 튀어나온 블랙 타이어)
+  // 2. 바퀴 회전 및 좌우 꺾임 디테일 바퀴
   ctx.fillStyle = '#2F3640';
-  // 앞좌측
-  ctx.fillRect(-car.width / 2 - 4, -car.height / 2 + 8, 5, 12);
-  // 앞우측
-  ctx.fillRect(car.width / 2 - 1, -car.height / 2 + 8, 5, 12);
-  // 뒤좌측
-  ctx.fillRect(-car.width / 2 - 4, car.height / 2 - 20, 5, 12);
-  // 뒤우측
-  ctx.fillRect(car.width / 2 - 1, car.height / 2 - 20, 5, 12);
+  const drawWheel = (wx, wy) => {
+    ctx.save();
+    ctx.translate(wx, wy);
+    // 달릴 때 바퀴 회전 무늬 느낌
+    const rotSize = Math.sin(car.wheelRotation) * 2;
+    ctx.fillRect(-2.5, -6, 5, 12);
+    // 바퀴 줄무늬
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(-2.5, rotSize - 2, 5, 3);
+    ctx.restore();
+  };
 
-  // 2. 메인 바디 (말랑말랑 노란색 장난감 카)
-  ctx.fillStyle = '#FFDE59';
+  // 앞좌측
+  drawWheel(-car.width / 2 - 2, -car.height / 2 + 10);
+  // 앞우측
+  drawWheel(car.width / 2 + 2, -car.height / 2 + 10);
+  // 뒤좌측
+  drawWheel(-car.width / 2 - 2, car.height / 2 - 14);
+  // 뒤우측
+  drawWheel(car.width / 2 + 2, car.height / 2 - 14);
+
+  // 3. 메인 바디 (기본: 노란색 장난감 카, 부스터: 스포티한 블루/네온 카)
+  ctx.fillStyle = boosterTime > 0 ? '#00DEC9' : '#FFDE59';
   ctx.beginPath();
   ctx.roundRect(-car.width / 2, -car.height / 2, car.width, car.height, 12);
   ctx.fill();
   
-  // 바디 외곽선 (손그림 느낌)
   ctx.strokeStyle = '#2F3640';
   ctx.lineWidth = 3;
   ctx.stroke();
 
-  // 3. 앞유리창 (하늘색 투명 느낌)
-  ctx.fillStyle = '#E8F4F8';
+  // 스포티 스트라이프 데칼 라인 추가
+  ctx.fillStyle = boosterTime > 0 ? '#FFFFFF' : '#FF5757';
+  ctx.fillRect(-4, -car.height / 2 + 4, 8, car.height - 8);
+
+  // 4. 유리창 (하늘색 그라데이션)
+  const glassGrad = ctx.createLinearGradient(0, -car.height/4, 0, 0);
+  glassGrad.addColorStop(0, '#E8F4F8');
+  glassGrad.addColorStop(1, '#81ECEC');
+  ctx.fillStyle = glassGrad;
   ctx.strokeStyle = '#2F3640';
   ctx.lineWidth = 2.5;
   ctx.beginPath();
@@ -251,20 +334,50 @@ function drawPlayer() {
   ctx.fill();
   ctx.stroke();
 
-  // 4. 귀여운 헤드라이트 (동그란 화이트/옐로우)
-  ctx.fillStyle = '#FFFFFF';
+  // 5. 헤드라이트 (둥글동글)
+  ctx.fillStyle = boosterTime > 0 ? '#FFEAA7' : '#FFFFFF';
   ctx.beginPath();
   ctx.arc(-car.width / 3, -car.height / 2 + 1, 4, 0, Math.PI * 2);
   ctx.arc(car.width / 3, -car.height / 2 + 1, 4, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = '#2F3640';
   ctx.stroke();
 
-  // 5. 귀여운 리어 범퍼/스포일러 혹은 하이라이트 (바디 위 하이라이트선)
-  ctx.fillStyle = '#FFEAA7';
+  // 6. 리어 윙 스포일러 (스포츠카 느낌 극대화)
+  ctx.fillStyle = boosterTime > 0 ? '#FF7675' : '#2F3640';
   ctx.beginPath();
-  ctx.roundRect(-car.width / 2 + 6, -car.height / 2 + 5, 5, 5, 1);
+  ctx.roundRect(-car.width / 2 - 4, car.height / 2 - 4, car.width + 8, 5, 2);
   ctx.fill();
+
+  // --- [배리어 보호막 시각효과] ---
+  if (activeShield) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(0, 206, 201, 0.8)';
+    ctx.lineWidth = 4;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = '#00CEC9';
+    // 크기가 미세하게 일렁임
+    const shieldScale = 1.25 + Math.sin(Date.now() / 80) * 0.05;
+    ctx.beginPath();
+    ctx.arc(0, 0, car.height * 0.65 * shieldScale, 0, Math.PI * 2);
+    ctx.stroke();
+    // 은은한 안쪽 채우기
+    ctx.fillStyle = 'rgba(129, 236, 236, 0.15)';
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // --- [자석 흡입 영역 효과] ---
+  if (magnetTime > 0) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255, 118, 117, 0.6)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 4]);
+    const magnetScale = 1.4 + Math.sin(Date.now() / 100) * 0.06;
+    ctx.beginPath();
+    ctx.arc(0, 0, 110 * magnetScale, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
 
   ctx.restore();
 }
@@ -296,7 +409,7 @@ function drawCone(ctx, x, y, w, h) {
   ctx.lineWidth = 3;
   ctx.stroke();
 
-  // 흰색 줄무늬 데코레이션
+  // 흰색 줄무늬
   ctx.fillStyle = '#FFFFFF';
   ctx.beginPath();
   ctx.moveTo(-w / 7, -h / 6);
@@ -321,7 +434,7 @@ function drawRock(ctx, x, y, w, h) {
   ctx.arc(0, h / 3, w / 2, 0, Math.PI * 2);
   ctx.fill();
 
-  // 돌 몸체 (보라/분홍빛 귀여운 둥글이 돌)
+  // 돌 몸체
   ctx.fillStyle = '#A55EEA';
   ctx.beginPath();
   ctx.arc(0, 0, w / 2, 0, Math.PI * 2);
@@ -331,7 +444,7 @@ function drawRock(ctx, x, y, w, h) {
   ctx.lineWidth = 3;
   ctx.stroke();
 
-  // 하이라이트 (귀여운 반짝임)
+  // 하이라이트
   ctx.fillStyle = '#D6A2E8';
   ctx.beginPath();
   ctx.arc(-w / 6, -h / 6, w / 5, 0, Math.PI * 2);
@@ -340,8 +453,228 @@ function drawRock(ctx, x, y, w, h) {
   ctx.restore();
 }
 
+// 7) 공사중 바리케이드 그리기 (가로가 긴 신규 장애물)
+function drawBarrier(ctx, x, y, w, h) {
+  ctx.save();
+  ctx.translate(x, y);
 
-// --- [게임 생명주기 관련 함수군] ---
+  // 지지대 (양 끝 다리)
+  ctx.fillStyle = '#4B5563';
+  ctx.fillRect(-w/2 + 2, -h/2, 6, h);
+  ctx.fillRect(w/2 - 8, -h/2, 6, h);
+  ctx.strokeStyle = '#2F3640';
+  ctx.lineWidth = 2.5;
+  ctx.strokeRect(-w/2 + 2, -h/2, 6, h);
+  ctx.strokeRect(w/2 - 8, -h/2, 6, h);
+
+  // 노랑/블랙 빗금 전면 보드
+  ctx.fillStyle = '#FED330';
+  ctx.beginPath();
+  ctx.roundRect(-w/2, -h/3, w, h * 0.6, 4);
+  ctx.fill();
+  ctx.stroke();
+
+  // 검은색 빗금들
+  ctx.fillStyle = '#2F3640';
+  for (let offset = -w/2 + 8; offset < w/2; offset += 20) {
+    ctx.beginPath();
+    ctx.moveTo(offset, -h/3);
+    ctx.lineTo(offset + 8, -h/3);
+    ctx.lineTo(offset - 4, h/3 - 4);
+    ctx.lineTo(offset - 12, h/3 - 4);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+// 8) 오일 드럼통 그리기 (트릭 장애물)
+function drawOilDrum(ctx, x, y, w, h) {
+  ctx.save();
+  ctx.translate(x, y);
+
+  // 그림자
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  ctx.fillRect(-w/2 - 2, h/2 - 3, w + 4, 6);
+
+  // 바디 그라데이션 (금속 깡통 광택)
+  const drumGrad = ctx.createLinearGradient(-w/2, 0, w/2, 0);
+  drumGrad.addColorStop(0, '#2F3640');
+  drumGrad.addColorStop(0.5, '#718093');
+  drumGrad.addColorStop(1, '#2F3640');
+  ctx.fillStyle = drumGrad;
+  ctx.strokeStyle = '#2F3640';
+  ctx.lineWidth = 3;
+
+  ctx.beginPath();
+  ctx.roundRect(-w/2, -h/2, w, h, 6);
+  ctx.fill();
+  ctx.stroke();
+
+  // 중간 라인 장식
+  ctx.beginPath();
+  ctx.moveTo(-w/2, -h/6);
+  ctx.lineTo(w/2, -h/6);
+  ctx.moveTo(-w/2, h/6);
+  ctx.lineTo(w/2, h/6);
+  ctx.stroke();
+
+  // 해골 마크 대신 주황색 오일 방울 비주얼 포인트
+  ctx.fillStyle = '#FF7675';
+  ctx.beginPath();
+  ctx.arc(0, 2, 4, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+// --- [아이템 드로잉 함수군] ---
+
+// 1) 코인 렌더링 (빛나는 둥근 금화)
+function drawCoinItem(ctx, x, y, size) {
+  ctx.save();
+  ctx.translate(x, y);
+
+  // 공전 반짝임 펄스 크기 계산
+  const pulse = Math.sin(Date.now() / 120) * 1.5;
+  const radius = size / 2 + pulse;
+
+  // 외곽선/그림자
+  ctx.fillStyle = '#D4AF37';
+  ctx.beginPath();
+  ctx.arc(0, 0, radius + 1, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 메인 바디
+  ctx.fillStyle = '#FFD700';
+  ctx.beginPath();
+  ctx.arc(0, 0, radius, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 중심 장식 (C자 음각 느낌)
+  ctx.strokeStyle = '#F39C12';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.arc(0, 0, radius * 0.55, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+// 2) 피버 부스터 렌더링 (로켓 ⚡모양)
+function drawBoosterItem(ctx, x, y, size) {
+  ctx.save();
+  ctx.translate(x, y);
+
+  // 위아래 통통 튀는 모션
+  const bounce = Math.sin(Date.now() / 100) * 3;
+  ctx.translate(0, bounce);
+
+  // 아우라 광원
+  ctx.shadowColor = '#00CEC9';
+  ctx.shadowBlur = 12;
+
+  // 붉은 메인 로켓 바디
+  ctx.fillStyle = '#0984E3';
+  ctx.strokeStyle = '#2F3640';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.roundRect(-size/2.5, -size/1.8, size * 0.8, size * 1.1, 8);
+  ctx.fill();
+  ctx.stroke();
+
+  // ⚡ 번개 마크 데코
+  ctx.fillStyle = '#FFDE59';
+  ctx.beginPath();
+  ctx.moveTo(-2, -8);
+  ctx.lineTo(6, -2);
+  ctx.lineTo(1, 0);
+  ctx.lineTo(5, 7);
+  ctx.lineTo(-4, 0);
+  ctx.lineTo(1, -2);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.restore();
+}
+
+// 3) 보호막 쉴드 렌더링 (하트 또는 방패 🛡️)
+function drawShieldItem(ctx, x, y, size) {
+  ctx.save();
+  ctx.translate(x, y);
+  const bounce = Math.sin(Date.now() / 110) * 3.5;
+  ctx.translate(0, bounce);
+
+  ctx.shadowColor = '#81ECEC';
+  ctx.shadowBlur = 10;
+
+  // 방패 플레이트
+  ctx.fillStyle = '#00CEC9';
+  ctx.strokeStyle = '#2F3640';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(0, -size/1.8);
+  ctx.lineTo(size/2, -size/3);
+  ctx.lineTo(size/2.5, size/4);
+  ctx.lineTo(0, size/1.8);
+  ctx.lineTo(-size/2.5, size/4);
+  ctx.lineTo(-size/2, -size/3);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // 십자 하이라이트 문양
+  ctx.strokeStyle = '#E8F4F8';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, -size/3);
+  ctx.lineTo(0, size/3);
+  ctx.moveTo(-size/4, 0);
+  ctx.lineTo(size/4, 0);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+// 4) 자석 🧲 렌더링
+function drawMagnetItem(ctx, x, y, size) {
+  ctx.save();
+  ctx.translate(x, y);
+  const bounce = Math.sin(Date.now() / 95) * 3;
+  ctx.translate(0, bounce);
+
+  ctx.shadowColor = '#FF7675';
+  ctx.shadowBlur = 10;
+
+  ctx.strokeStyle = '#D63031';
+  ctx.lineWidth = 7;
+  ctx.lineCap = 'round';
+
+  // 말굽 자석 렌더링
+  ctx.beginPath();
+  ctx.arc(0, 2, size * 0.35, Math.PI, 0, true);
+  // 양 극 기둥 밑으로 뻗음
+  ctx.lineTo(size * 0.35, -7);
+  ctx.moveTo(-size * 0.35, 2);
+  ctx.lineTo(-size * 0.35, -7);
+  ctx.stroke();
+
+  // 철판 쇠받이 (자석 극 끝단 하얀 부분)
+  ctx.strokeStyle = '#ECEFF1';
+  ctx.lineWidth = 7;
+  ctx.beginPath();
+  ctx.moveTo(-size * 0.35, -7);
+  ctx.lineTo(-size * 0.35, -11);
+  ctx.moveTo(size * 0.35, -7);
+  ctx.lineTo(size * 0.35, -11);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+
+// --- [게임 시스템 및 라이프사이클 관리] ---
 
 // 하트 UI 실시간 갱신
 function updateHeartsUI() {
@@ -361,21 +694,31 @@ function startGame() {
   lives = 3;
   gameSpeed = BASE_SPEED;
   invincibleTime = 0;
+  activeShield = false;
+  boosterTime = 0;
+  magnetTime = 0;
   
   car.x = GAME_WIDTH / 2;
   car.vx = 0;
   car.angle = 0;
+  car.wheelRotation = 0;
   
   obstacles = [];
+  gameItems = [];
   particles = [];
+  dustParticles = [];
+  speedLines = [];
+  screenOils = [];
+  floatingTexts = [];
   sceneryObjects = [];
   
-  // 넉넉하게 배경 나무 스폰해두기
-  for (let i = 0; i < 6; i++) {
+  // 넉넉하게 배경 데코 스폰
+  for (let i = 0; i < 8; i++) {
     sceneryObjects.push({
-      x: Math.random() < 0.5 ? Math.random() * (roadX - 30) + 15 : Math.random() * (GAME_WIDTH - roadX - 30) + roadX + roadWidth + 15,
+      x: Math.random() < 0.5 ? Math.random() * (roadX - 35) + 15 : Math.random() * (GAME_WIDTH - roadX - 35) + roadX + roadWidth + 20,
       y: Math.random() * GAME_HEIGHT,
-      type: Math.random() < 0.6 ? 'tree' : 'flower'
+      type: Math.random() < 0.4 ? 'tree' : (Math.random() < 0.75 ? 'flower' : 'windmill'),
+      rot: Math.random() * Math.PI
     });
   }
 
@@ -386,60 +729,139 @@ function startGame() {
   gameOverScreen.classList.remove('active');
 }
 
-// 게임 오버 처리
+// 게임 오버
 function triggerGameOver() {
   gameState = 'GAMEOVER';
-  
-  // 최고기록 갱신
   if (score > highscore) {
     highscore = score;
     localStorage.setItem('toycar_highscore', highscore);
   }
-
   finalScore.textContent = score;
   bestScore.textContent = highscore;
-
   gameOverScreen.classList.add('active');
 }
 
-// 충돌 발생 시 화면 흔들림 및 라이프 차감
+// 충돌 처리 (보호막 유무 판정)
 function handleCollision(obsIndex) {
-  obstacles.splice(obsIndex, 1); // 해당 장애물 제거
+  const obs = obstacles[obsIndex];
   
+  // 오일 드럼통일 때는 하트 감소가 아닌 화면 방해 기믹만 작동!
+  if (obs.type === 'oildrum') {
+    obstacles.splice(obsIndex, 1);
+    createCrashParticles(obs.x, obs.y, '#2F3640');
+    // 화면에 물감/오일 튀김 생성
+    triggerScreenOil();
+    addFloatingText(car.x, car.y - 40, "미끌미끌!", "#718093");
+    shakeTime = 8;
+    shakeAmount = 4;
+    return;
+  }
+
+  // 부스터 피버 모드일 땐 부딪혀도 장애물이 그냥 터져서 날아감
+  if (boosterTime > 0) {
+    obstacles.splice(obsIndex, 1);
+    createCrashParticles(obs.x, obs.y, '#FFD700');
+    addFloatingText(obs.x, obs.y, "파괴!!", "#00DEC9");
+    shakeTime = 6;
+    shakeAmount = 5;
+    score += 150; // 파괴 보너스 점수!
+    return;
+  }
+
+  // 보호막이 켜져있을 경우 배리어가 막아주고 종료
+  if (activeShield) {
+    activeShield = false;
+    obstacles.splice(obsIndex, 1);
+    createCrashParticles(obs.x, obs.y, '#81ECEC');
+    addFloatingText(car.x, car.y - 40, "SHIELD BLOCK!", "#00CEC9");
+    shakeTime = 10;
+    shakeAmount = 5;
+    invincibleTime = 45; // 짧은 무적 시간 부여
+    return;
+  }
+
+  // 일반 충돌 시 라이프 차감
+  obstacles.splice(obsIndex, 1);
   lives--;
   updateHeartsUI();
   
-  // 화면 흔들림 셋업
-  shakeTime = 15;
-  shakeAmount = 8;
-  
-  // 충돌 스파크 파티클 생성
-  createCrashParticles(car.x, car.y - car.height / 3);
+  shakeTime = 20;
+  shakeAmount = 10;
+  createCrashParticles(car.x, car.y - 10, '#FF7675');
+  addFloatingText(car.x, car.y - 40, "앗!!", "#FF5757");
 
   if (lives <= 0) {
     triggerGameOver();
   } else {
-    // 임시 무적 타임 돌입
     invincibleTime = INVINCIBLE_DURATION;
   }
 }
 
-// 충돌 파티클 스폰
-function createCrashParticles(x, y) {
-  for (let i = 0; i < 15; i++) {
+// 충돌 스파크 파티클
+function createCrashParticles(x, y, color = '#FD9644') {
+  for (let i = 0; i < 18; i++) {
     const angle = Math.random() * Math.PI * 2;
-    const speed = Math.random() * 4 + 2;
+    const speed = Math.random() * 5 + 3;
     particles.push({
       x: x,
       y: y,
       vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed - 2, // 살짝 위쪽으로 튀김
-      size: Math.random() * 5 + 3,
-      color: Math.random() < 0.5 ? '#FD9644' : '#FFDE59',
+      vy: Math.sin(angle) * speed - 2, 
+      size: Math.random() * 6 + 3,
+      color: color === 'random' ? (Math.random() < 0.5 ? '#FFD700' : '#81ECEC') : color,
       alpha: 1,
-      decay: Math.random() * 0.03 + 0.02
+      decay: Math.random() * 0.035 + 0.02
     });
   }
+}
+
+// 배기구 흙먼지 파티클 추가
+function spawnDust() {
+  if (gameState !== 'PLAYING') return;
+  // 바퀴 양쪽 뒤에서 흙먼지가 조금씩 보글보글 일어남
+  const rotFactor = car.angle;
+  const leftX = car.x - 14 - Math.sin(rotFactor) * 15;
+  const rightX = car.x + 14 - Math.sin(rotFactor) * 15;
+  const dustY = car.y + car.height / 2;
+
+  const createDustObj = (dx) => {
+    dustParticles.push({
+      x: dx,
+      y: dustY,
+      vx: (Math.random() - 0.5) * 1 - car.vx * 0.2,
+      vy: gameSpeed * 0.3 + Math.random() * 1.2, // 속도감 비례
+      size: Math.random() * 5 + 3,
+      alpha: 0.6,
+      decay: Math.random() * 0.03 + 0.02
+    });
+  };
+
+  createDustObj(leftX);
+  createDustObj(rightX);
+}
+
+// 오일 충돌 시 시각방해 효과 설정
+function triggerScreenOil() {
+  screenOils.push({
+    x: Math.random() * (GAME_WIDTH - 60) + 30,
+    y: Math.random() * (GAME_HEIGHT / 2) + 80,
+    radius: Math.random() * 25 + 15,
+    alpha: 0.9,
+    life: 180 // 약 3초 유지
+  });
+}
+
+// 통통 뜨는 점수/텍스트 팝업 추가
+function addFloatingText(x, y, text, color = '#FFD700') {
+  floatingTexts.push({
+    x: x,
+    y: y,
+    text: text,
+    color: color,
+    vy: -1.8,
+    alpha: 1.0,
+    scale: 1.0
+  });
 }
 
 
@@ -448,44 +870,47 @@ function createCrashParticles(x, y) {
 function update() {
   if (gameState !== 'PLAYING') return;
 
-  // 1. 점진적으로 게임 속도 증가
-  if (gameSpeed < MAX_SPEED) {
-    gameSpeed += SPEED_INC;
+  // 1. 부스터 모드 여부에 따른 스피드 가중치
+  let targetSpeed = BASE_SPEED;
+  if (boosterTime > 0) {
+    boosterTime--;
+    targetSpeed = MAX_SPEED + 2.0; // 시원한 미친 부스터 속도!
+  } else {
+    // 서서히 다이내믹하게 빨라짐
+    if (gameSpeed < MAX_SPEED) {
+      gameSpeed += SPEED_INC;
+    }
+    targetSpeed = gameSpeed;
   }
 
-  // 2. 점수 증가 (생존 프레임마다 누적)
-  score += 1;
+  // 2. 스크롤 누적 점수 증가 (부스터 중일 땐 점수 누적 대폭 증가)
+  score += boosterTime > 0 ? 3 : 1;
   scoreVal.textContent = score;
 
-  // 3. 플레이어 무적 타이머 카운트다운
-  if (invincibleTime > 0) {
-    invincibleTime--;
-  }
+  // 3. 타이머 제어
+  if (invincibleTime > 0) invincibleTime--;
+  if (magnetTime > 0) magnetTime--;
 
-  // 4. 좌우 이동 및 피드백 각도 물리 연출
+  // 바퀴 회전 애니용 각도 증가
+  car.wheelRotation += targetSpeed * 0.15;
+
+  // 4. 좌우 조작 물리 적용
   if (keys['ArrowLeft'] || keys['a'] || keys['A'] || touchLeftPressed) {
     car.vx -= car.acc;
-    // 꺾을 때 좌측으로 비주얼 롤링 (부드러운 기울기)
-    car.angle = Math.max(car.angle - 0.03, -0.15);
+    car.angle = Math.max(car.angle - 0.035, -0.16);
   } else if (keys['ArrowRight'] || keys['d'] || keys['D'] || touchRightPressed) {
     car.vx += car.acc;
-    // 꺾을 때 우측으로 비주얼 롤링
-    car.angle = Math.min(car.angle + 0.03, 0.15);
+    car.angle = Math.min(car.angle + 0.035, 0.16);
   } else {
-    // 핸들을 안 잡으면 차가 똑바로 돌아옴
     car.angle *= 0.8;
   }
 
-  // 미끄러지는 물리 마찰 적용
   car.vx *= car.friction;
-  
-  // 속도 한계 제어
   if (car.vx > car.maxVx) car.vx = car.maxVx;
   if (car.vx < -car.maxVx) car.vx = -car.maxVx;
-
   car.x += car.vx;
 
-  // 도로 양옆 이탈 가드라인 (도로 밖으로 너무 나가지 않게)
+  // [버그 수정]: 안전지대 차단을 위한 도로 가장자리 복귀 가드 보강
   const leftLimit = roadX + car.width / 2;
   const rightLimit = roadX + roadWidth - car.width / 2;
   
@@ -498,61 +923,198 @@ function update() {
     car.vx = 0;
   }
 
-  // 5. 도로 스크롤 처리
-  roadOffset = (roadOffset + gameSpeed) % 40;
+  // 5. 도로 및 고속 스피드라인 업데이트
+  roadOffset = (roadOffset + targetSpeed) % 40;
 
-  // 6. 도로 데코레이션(나무, 꽃) 업데이트 및 스폰
+  if (targetSpeed > 7.0 && Math.random() < 0.2) {
+    // 속도감이 전면적으로 시원해짐
+    speedLines.push({
+      x: Math.random() * GAME_WIDTH,
+      y: -50,
+      len: Math.random() * 40 + 20,
+      speed: targetSpeed * 1.5 + Math.random() * 3
+    });
+  }
+  for (let i = speedLines.length - 1; i >= 0; i--) {
+    speedLines[i].y += speedLines[i].speed;
+    if (speedLines[i].y > GAME_HEIGHT) {
+      speedLines.splice(i, 1);
+    }
+  }
+
+  // 배기가스 먼지 스폰 주기적 생성
+  if (Math.random() < 0.4) {
+    spawnDust();
+  }
+  for (let i = dustParticles.length - 1; i >= 0; i--) {
+    const d = dustParticles[i];
+    d.x += d.vx;
+    d.y += d.vy;
+    d.alpha -= d.decay;
+    if (d.alpha <= 0) {
+      dustParticles.splice(i, 1);
+    }
+  }
+
+  // 6. 도로 주변 풍경 업데이트
   sceneryObjects.forEach(obj => {
-    obj.y += gameSpeed;
+    obj.y += targetSpeed;
+    if (obj.type === 'windmill') {
+      obj.rot += 0.04; // 풍차 회전 각도 누적
+    }
   });
   
-  // 화면을 완전히 내려간 요소는 위쪽으로 재배치
   sceneryObjects.forEach(obj => {
-    if (obj.y > GAME_HEIGHT + 30) {
+    if (obj.y > GAME_HEIGHT + 40) {
       obj.y = -40;
       obj.x = Math.random() < 0.5 
-        ? Math.random() * (roadX - 30) + 15 
-        : Math.random() * (GAME_WIDTH - roadX - 30) + roadX + roadWidth + 15;
-      obj.type = Math.random() < 0.5 ? 'tree' : (Math.random() < 0.8 ? 'flower' : 'cloud');
+        ? Math.random() * (roadX - 35) + 15 
+        : Math.random() * (GAME_WIDTH - roadX - 35) + roadX + roadWidth + 20;
+      obj.type = Math.random() < 0.4 ? 'tree' : (Math.random() < 0.75 ? 'flower' : 'windmill');
     }
   });
 
-  // 7. 장애물 스폰 로직
-  obstacleSpawnTimer++;
-  if (obstacleSpawnTimer > obstacleSpawnInterval) {
-    obstacleSpawnTimer = 0;
-    // 속도가 빨라질 수록 장애물 생성도 빈번해짐 (난이도 완화 밸런싱)
-    obstacleSpawnInterval = Math.max(75, 140 - (gameSpeed * 8));
+  // 7. 장애물 및 아이템 주기적 통합 스폰 로직
+  spawnTimer++;
+  if (spawnTimer > spawnInterval) {
+    spawnTimer = 0;
+    // 게임 진행 속도에 따라 서서히 빨라짐
+    spawnInterval = Math.max(50, 110 - (targetSpeed * 6));
 
-    const type = Math.random() < 0.6 ? 'cone' : 'rock';
-    // 도로 폭 범위 내에서 랜덤 좌우 슬롯 설정 (3개 가상 레인 개념)
-    const lane = Math.floor(Math.random() * 3);
-    const laneWidth = roadWidth / 3;
-    const spawnX = roadX + (lane * laneWidth) + (laneWidth / 2);
+    const rng = Math.random();
 
-    obstacles.push({
-      x: spawnX,
-      y: -30,
-      width: type === 'cone' ? 24 : 28,
-      height: type === 'cone' ? 32 : 28,
-      type: type
-    });
+    if (rng < 0.65) {
+      // --- [장애물 스폰] ---
+      const typeRoll = Math.random();
+      let type = 'cone';
+      let w = 24, h = 32;
+
+      if (typeRoll < 0.45) {
+        type = 'cone'; w = 24; h = 32;
+      } else if (typeRoll < 0.75) {
+        type = 'rock'; w = 28; h = 28;
+      } else if (typeRoll < 0.90) {
+        type = 'barrier'; w = 62; h = 34; // 2레인 덮는 넓은 바리케이드
+      } else {
+        type = 'oildrum'; w = 26; h = 38; // 오일 스크린 방해형
+      }
+
+      // [핵심 버그 수정 및 안전지대 타파]:
+      // 기존 3개 레인 정가운데 스폰에서 탈피하여 좌우 미세 오프셋 무작위 추가, 
+      // 최좌측 및 최우측 도로 가장자리까지 커버되도록 넓고 정교한 타겟 스폰 실시!
+      let spawnX;
+      if (type === 'barrier') {
+        // 넓은 바리케이드는 도로 내부 무작위 중심부에 정밀 배치
+        spawnX = Math.random() * (roadWidth - w) + roadX + w/2;
+      } else {
+        // 일반 장애물: 도로의 최좌측 경계(roadX)부터 최우측 경계(roadX + roadWidth)까지 
+        // 꼼수가 완전히 없도록 완전 무작위 촘촘 스폰 설계!
+        spawnX = Math.random() * (roadWidth - w - 8) + roadX + w/2 + 4;
+      }
+
+      obstacles.push({
+        x: spawnX,
+        y: -40,
+        width: w,
+        height: h,
+        type: type
+      });
+
+    } else {
+      // --- [아이템 스폰] ---
+      const itemRoll = Math.random();
+      let itype = 'coin';
+      if (itemRoll < 0.70) {
+        itype = 'coin';
+      } else if (itemRoll < 0.82) {
+        itype = 'shield';
+      } else if (itemRoll < 0.92) {
+        itype = 'magnet';
+      } else {
+        itype = 'booster';
+      }
+
+      // 아이템 역시 도로 위 다양한 영역에 무작위 배치
+      const spawnX = Math.random() * (roadWidth - 30) + roadX + 15;
+      gameItems.push({
+        x: spawnX,
+        y: -30,
+        width: itype === 'coin' ? 20 : 25,
+        height: itype === 'coin' ? 20 : 25,
+        type: itype
+      });
+    }
   }
 
-  // 8. 장애물 이동 및 충돌 감지
+  // 8. 아이템 루프 처리 (자석 연출 포함)
+  for (let i = gameItems.length - 1; i >= 0; i--) {
+    const it = gameItems[i];
+    it.y += targetSpeed;
+
+    // 자석이 활성화 상태일 때 코인을 플레이어 차량 방향으로 중력 가속 유도
+    if (magnetTime > 0 && it.type === 'coin') {
+      const dx = car.x - it.x;
+      const dy = car.y - it.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      
+      // 약 140px 이내의 코인을 부드럽게 차량에 흡수
+      if (dist < 140) {
+        const pullForce = (140 - dist) * 0.08;
+        it.x += (dx / dist) * pullForce;
+        it.y += (dy / dist) * pullForce - targetSpeed * 0.4;
+      }
+    }
+
+    // 화면 아웃 처리
+    if (it.y > GAME_HEIGHT + 30) {
+      gameItems.splice(i, 1);
+      continue;
+    }
+
+    // 플레이어 충돌 판정 (아이템)
+    const itScale = 0.85;
+    if (
+      Math.abs(car.x - it.x) < (car.width + it.width) * 0.5 * itScale &&
+      Math.abs(car.y - it.y) < (car.height + it.height) * 0.5 * itScale
+    ) {
+      // 아이템 효과 발현!
+      if (it.type === 'coin') {
+        score += 150;
+        addFloatingText(it.x, it.y, "+150 COIN!", "#FED330");
+        createCrashParticles(it.x, it.y, '#FFD700');
+      } else if (it.type === 'shield') {
+        activeShield = true;
+        addFloatingText(car.x, car.y - 45, "보호막 장착 🛡️", "#00CEC9");
+        createCrashParticles(it.x, it.y, '#81ECEC');
+      } else if (it.type === 'magnet') {
+        magnetTime = MAGNET_DURATION;
+        addFloatingText(car.x, car.y - 45, "코인 자석 활성 🧲", "#FF7675");
+        createCrashParticles(it.x, it.y, '#FF7675');
+      } else if (it.type === 'booster') {
+        boosterTime = BOOSTER_DURATION;
+        invincibleTime = BOOSTER_DURATION + 30; // 부스터 중에는 완벽 무적 제공!
+        addFloatingText(car.x, car.y - 45, "슈퍼 피버 부스터!! ⚡", "#00DEC9");
+        createCrashParticles(it.x, it.y, '#FFD700');
+        shakeTime = 30;
+        shakeAmount = 6;
+      }
+
+      gameItems.splice(i, 1);
+    }
+  }
+
+  // 9. 장애물 업데이트 및 충돌 판단
   for (let i = obstacles.length - 1; i >= 0; i--) {
     const obs = obstacles[i];
-    obs.y += gameSpeed;
+    obs.y += targetSpeed;
 
-    // 화면 밑으로 나간 장애물 삭제
     if (obs.y > GAME_HEIGHT + 30) {
       obstacles.splice(i, 1);
       continue;
     }
 
-    // 충돌 박스 검증 (AABB 방식)
-    // 억울하게 스치며 터지는 문제를 막기 위해 히트박스를 스프라이트의 60% 수준으로 훨씬 더 타이트하게 완화 (기존 75% -> 60%)
-    const hitBoxScale = 0.60;
+    // 타이트한 히트박스 판정
+    const hitBoxScale = 0.65;
     const carLeft = car.x - (car.width * hitBoxScale) / 2;
     const carRight = car.x + (car.width * hitBoxScale) / 2;
     const carTop = car.y - (car.height * hitBoxScale) / 2;
@@ -569,14 +1131,14 @@ function update() {
       carBottom > obsTop &&
       carTop < obsBottom
     ) {
-      // 충돌 발생! (플레이어가 무적 아닐 때만)
-      if (invincibleTime === 0) {
+      // 부스터 중이 아니고 일반 무적 타이밍 아닐 때 충돌
+      if (invincibleTime === 0 || boosterTime > 0) {
         handleCollision(i);
       }
     }
   }
 
-  // 9. 충돌 스파크 파티클 업데이트
+  // 10. 충돌 스파크 파티클 업데이트
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
     p.x += p.vx;
@@ -587,7 +1149,30 @@ function update() {
     }
   }
 
-  // 10. 화면 흔들림(Screen Shake) 감쇠
+  // 11. 화면 방해 오일 효과 감쇠
+  for (let i = screenOils.length - 1; i >= 0; i--) {
+    const oil = screenOils[i];
+    oil.life--;
+    if (oil.life < 40) {
+      oil.alpha = oil.life / 40; // 서서히 증발/투명 효과
+    }
+    if (oil.life <= 0) {
+      screenOils.splice(i, 1);
+    }
+  }
+
+  // 12. 통통 뜨는 텍스트 애니메이션 업데이트
+  for (let i = floatingTexts.length - 1; i >= 0; i--) {
+    const ft = floatingTexts[i];
+    ft.y += ft.vy;
+    ft.alpha -= 0.016;
+    ft.scale += 0.005;
+    if (ft.alpha <= 0) {
+      floatingTexts.splice(i, 1);
+    }
+  }
+
+  // 13. 화면 흔들림(Screen Shake) 감쇠
   if (shakeTime > 0) {
     shakeTime--;
   }
@@ -597,7 +1182,6 @@ function draw() {
   ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
   ctx.save();
-  // 화면 흔들림 연출 적용
   if (shakeTime > 0) {
     const dx = (Math.random() - 0.5) * shakeAmount;
     const dy = (Math.random() - 0.5) * shakeAmount;
@@ -614,50 +1198,133 @@ function draw() {
 
   // 3. 차선 가이드 엣지 (도로 테두리 흰색 라인)
   ctx.fillStyle = '#FFFFFF';
-  ctx.fillRect(roadX - 4, 0, 4, GAME_HEIGHT); // 왼쪽 가드라인
-  ctx.fillRect(roadX + roadWidth, 0, 4, GAME_HEIGHT); // 오른쪽 가드라인
+  ctx.fillRect(roadX - 4, 0, 4, GAME_HEIGHT); 
+  ctx.fillRect(roadX + roadWidth, 0, 4, GAME_HEIGHT); 
 
   // 4. 가운데 움직이는 흰색 중앙 차선(점선)
   ctx.strokeStyle = '#FFFFFF';
   ctx.lineWidth = 4;
-  ctx.setLineDash([20, 20]); // 20px선, 20px빈칸
-  ctx.lineDashOffset = -roadOffset; // 스크롤
+  ctx.setLineDash([20, 20]); 
+  // 속도에 연동된 스크롤 오프셋
+  ctx.lineDashOffset = -roadOffset; 
   ctx.beginPath();
   ctx.moveTo(GAME_WIDTH / 2, 0);
   ctx.lineTo(GAME_WIDTH / 2, GAME_HEIGHT);
   ctx.stroke();
-  ctx.setLineDash([]); // 대시 설정 초기화
+  ctx.setLineDash([]); // 리셋
 
-  // 5. 도로 사이드 데코레이션(나무, 꽃, 구름) 그리기
+  // 5. 도로 주변 데코 (풍차, 나무, 꽃, 구름)
   sceneryObjects.forEach(obj => {
     if (obj.type === 'tree') {
       drawTree(ctx, obj.x, obj.y);
     } else if (obj.type === 'flower') {
       drawFlower(ctx, obj.x, obj.y);
-    } else if (obj.type === 'cloud') {
-      drawCloud(ctx, obj.x, obj.y, 14);
+    } else if (obj.type === 'windmill') {
+      drawWindmill(ctx, obj.x, obj.y, obj.rot);
     }
   });
 
-  // 6. 장애물 그리기
+  // 6. 아이템 그리기
+  gameItems.forEach(it => {
+    if (it.type === 'coin') {
+      drawCoinItem(ctx, it.x, it.y, it.width);
+    } else if (it.type === 'shield') {
+      drawShieldItem(ctx, it.x, it.y, it.width);
+    } else if (it.type === 'magnet') {
+      drawMagnetItem(ctx, it.x, it.y, it.width);
+    } else if (it.type === 'booster') {
+      drawBoosterItem(ctx, it.x, it.y, it.width);
+    }
+  });
+
+  // 7. 장애물 그리기
   obstacles.forEach(obs => {
     if (obs.type === 'cone') {
       drawCone(ctx, obs.x, obs.y, obs.width, obs.height);
     } else if (obs.type === 'rock') {
       drawRock(ctx, obs.x, obs.y, obs.width, obs.height);
+    } else if (obs.type === 'barrier') {
+      drawBarrier(ctx, obs.x, obs.y, obs.width, obs.height);
+    } else if (obs.type === 'oildrum') {
+      drawOilDrum(ctx, obs.x, obs.y, obs.width, obs.height);
     }
   });
 
-  // 7. 플레이어 장난감 자동차 그리기
+  // 8. 플레이어 배기가스 먼지 그리기
+  dustParticles.forEach(d => {
+    ctx.save();
+    ctx.globalAlpha = d.alpha;
+    ctx.fillStyle = '#E4F1FE'; // 뭉게뭉게 구름같은 장난감 연기 색상
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  });
+
+  // 9. 플레이어 장난감 자동차 그리기
   drawPlayer();
 
-  // 8. 충돌 파티클 그리기
+  // 10. 충돌 파티클 그리기
   particles.forEach(p => {
     ctx.save();
     ctx.globalAlpha = p.alpha;
     ctx.fillStyle = p.color;
     ctx.beginPath();
     ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  });
+
+  // 11. 고속 스피드라인 그리기
+  if (speedLines.length > 0) {
+    ctx.save();
+    ctx.strokeStyle = boosterTime > 0 ? 'rgba(0, 206, 201, 0.4)' : 'rgba(255, 255, 255, 0.25)';
+    ctx.lineWidth = 1.5;
+    speedLines.forEach(line => {
+      ctx.beginPath();
+      ctx.moveTo(line.x, line.y);
+      ctx.lineTo(line.x, line.y + line.len);
+      ctx.stroke();
+    });
+    ctx.restore();
+  }
+
+  // 12. 통통 뜨는 텍스트 그리기
+  floatingTexts.forEach(ft => {
+    ctx.save();
+    ctx.globalAlpha = ft.alpha;
+    ctx.font = '900 16px "Jua", sans-serif';
+    ctx.fillStyle = ft.color;
+    ctx.strokeStyle = '#2F3640';
+    ctx.lineWidth = 3;
+    ctx.textAlign = 'center';
+    
+    ctx.translate(ft.x, ft.y);
+    ctx.scale(ft.scale, ft.scale);
+    ctx.strokeText(ft.text, 0, 0);
+    ctx.fillText(ft.text, 0, 0);
+    ctx.restore();
+  });
+
+  // 13. 피버 모드일 때 화면 가장자리 네온 아우라 광원 연출
+  if (boosterTime > 0) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(0, 222, 201, 0.45)';
+    ctx.lineWidth = 12;
+    ctx.strokeRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    ctx.restore();
+  }
+
+  // 14. 오일 스크린 번짐 연출 그리기 (가장 위에 덧칠)
+  screenOils.forEach(oil => {
+    ctx.save();
+    ctx.globalAlpha = oil.alpha;
+    ctx.fillStyle = 'rgba(47, 54, 64, 0.95)'; // 새까만 장난감 오일 색
+    ctx.beginPath();
+    // 둥글고 귀여운 덩어리형 액체 튐 표현
+    ctx.arc(oil.x, oil.y, oil.radius, 0, Math.PI * 2);
+    ctx.arc(oil.x - oil.radius * 0.4, oil.y + oil.radius * 0.3, oil.radius * 0.6, 0, Math.PI * 2);
+    ctx.arc(oil.x + oil.radius * 0.5, oil.y - oil.radius * 0.2, oil.radius * 0.5, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   });
@@ -673,18 +1340,15 @@ function loop() {
 }
 
 // --- [버튼 이벤트 및 리스너 등록] ---
-
 startBtn.addEventListener('click', startGame);
 restartBtn.addEventListener('click', startGame);
 
-// 터치 스크롤이나 바운스 제스처 원천 방지
 document.addEventListener('touchmove', (e) => {
   if (e.scale !== 1) {
     e.preventDefault();
   }
 }, { passive: false });
 
-// 앱 실행 초기화
 resizeCanvas();
 window.addEventListener('resize', resizeCanvas);
 loop();
