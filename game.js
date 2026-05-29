@@ -998,11 +998,15 @@ function triggerGameOver() {
   stopBgm(); // 배경음 중단
   playSound('gameover'); // 패배 하강 멜로디
   gameState = 'GAMEOVER';
-  if (score > highscore) {
-    highscore = score;
+  
+  // 실시간 획득 점수가 소수점을 가지므로 정수형으로 소수점 절사 보정
+  const roundedScore = Math.floor(score);
+  
+  if (roundedScore > highscore) {
+    highscore = roundedScore;
     localStorage.setItem('toycar_highscore', highscore);
   }
-  finalScore.textContent = score;
+  finalScore.textContent = roundedScore;
   bestScore.textContent = highscore;
   gameOverScreen.classList.add('active');
 }
