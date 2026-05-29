@@ -93,7 +93,15 @@ let audioCtx = null;
 
 function initAudio() {
   if (!audioCtx) {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    try {
+      const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtxClass) {
+        audioCtx = new AudioCtxClass();
+      }
+    } catch (e) {
+      console.log("AudioContext 초기화 에러:", e);
+      audioCtx = null; // 오디오 미지원 디바이스 완벽 폴백
+    }
   }
 }
 
@@ -1509,8 +1517,20 @@ function loop(timestamp) {
 }
 
 // --- [버튼 이벤트 및 리스너 등록] ---
+// PC 클릭 연동
 startBtn.addEventListener('click', startGame);
 restartBtn.addEventListener('click', startGame);
+
+// 스마트폰 모바일 터치 대응 (click 이벤트가 간헐적으로 안 받는 브라우저 완벽 보호)
+startBtn.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  startGame();
+}, { passive: false });
+
+restartBtn.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  startGame();
+}, { passive: false });
 
 document.addEventListener('touchmove', (e) => {
   if (e.scale !== 1) {
