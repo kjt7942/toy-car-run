@@ -1305,9 +1305,9 @@ function update(dt = 1.0) {
   // 10. 충돌 스파크 파티클 업데이트
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
-    p.x += p.vx;
-    p.y += p.vy;
-    p.alpha -= p.decay;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.alpha -= p.decay * dt;
     if (p.alpha <= 0) {
       particles.splice(i, 1);
     }
@@ -1316,7 +1316,7 @@ function update(dt = 1.0) {
   // 11. 화면 방해 오일 효과 감쇠
   for (let i = screenOils.length - 1; i >= 0; i--) {
     const oil = screenOils[i];
-    oil.life--;
+    oil.life = Math.max(0, oil.life - dt);
     if (oil.life < 40) {
       oil.alpha = oil.life / 40; // 서서히 증발/투명 효과
     }
@@ -1328,9 +1328,9 @@ function update(dt = 1.0) {
   // 12. 통통 뜨는 텍스트 애니메이션 업데이트
   for (let i = floatingTexts.length - 1; i >= 0; i--) {
     const ft = floatingTexts[i];
-    ft.y += ft.vy;
-    ft.alpha -= 0.016;
-    ft.scale += 0.005;
+    ft.y += ft.vy * dt;
+    ft.alpha -= 0.016 * dt;
+    ft.scale += 0.005 * dt;
     if (ft.alpha <= 0) {
       floatingTexts.splice(i, 1);
     }
@@ -1338,7 +1338,7 @@ function update(dt = 1.0) {
 
   // 13. 화면 흔들림(Screen Shake) 감쇠
   if (shakeTime > 0) {
-    shakeTime--;
+    shakeTime = Math.max(0, shakeTime - dt);
   }
 }
 
