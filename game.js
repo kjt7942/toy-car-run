@@ -28,11 +28,11 @@ let keys = {};
 let touchLeftPressed = false;
 let touchRightPressed = false;
 
-// 게임 밸런스 및 물리 상수
-let gameSpeed = 3.2;
-const BASE_SPEED = 3.2;       
-const MAX_SPEED = 9.5;        
-const SPEED_INC = 0.0003;      
+// 게임 밸런스 및 물리 상수 (초반 난이도를 쫄깃하게 4.8로 상향, 가속 및 최고속도 버프)
+let gameSpeed = 4.8;
+const BASE_SPEED = 4.8;       
+const MAX_SPEED = 11.0;        
+const SPEED_INC = 0.0005;      
 
 // 화면 흔들림(Screen Shake)
 let shakeTime = 0;
@@ -86,7 +86,91 @@ let obstacles = [];
 let gameItems = [];
 
 let spawnTimer = 0;
-let spawnInterval = 100; // 프레임당 스폰 주기
+let spawnInterval = 70; // 프레임당 스폰 주기 (더 촘촘하게 압박!)
+
+// --- [Web Audio API 효과음 플레이어] ---
+let audioCtx = null;
+
+function initAudio() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+}
+
+function playSound(type) {
+  try {
+    initAudio();
+    if (!audioCtx) return;
+    
+    // 브라우저 자동재생 제한 우회
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+
+    const osc = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+    
+    osc.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+    
+    const now = audioCtx.currentTime;
+
+    if (type === 'coin') {
+      // 높은 톤의 "띠링♪" 소리
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, now); // D5
+      osc.frequency.setValueAtTime(880.00, now + 0.08); // A5
+      gainNode.gain.setValueAtTime(0.12, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+      osc.start(now);
+      osc.stop(now + 0.25);
+    } 
+    else if (type === 'item') {
+      // "뾰로롱↑" 주파수 상승
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(330, now); // E4
+      osc.frequency.exponentialRampToValueAtTime(990, now + 0.35);
+      gainNode.gain.setValueAtTime(0.15, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+      osc.start(now);
+      osc.stop(now + 0.38);
+    } 
+    else if (type === 'booster') {
+      // 제트기 가속 사운드!
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(150, now);
+      osc.frequency.exponentialRampToValueAtTime(1200, now + 0.8);
+      gainNode.gain.setValueAtTime(0.1, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.85);
+      osc.start(now);
+      osc.stop(now + 0.85);
+    } 
+    else if (type === 'crash') {
+      // 폭발음 "쾅!" (노이즈 필터 또는 삼각파 디케이)
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(220, now);
+      osc.frequency.linearRampToValueAtTime(40, now + 0.4);
+      gainNode.gain.setValueAtTime(0.3, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+      osc.start(now);
+      osc.stop(now + 0.45);
+    } 
+    else if (type === 'gameover') {
+      // 하강하는 레트로 아케이드 패배음
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(440, now);
+      osc.frequency.setValueAtTime(349.23, now + 0.15); // F4
+      osc.frequency.setValueAtTime(293.66, now + 0.3);  // D4
+      osc.frequency.linearRampToValueAtTime(110, now + 0.8);
+      gainNode.gain.setValueAtTime(0.18, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.85);
+      osc.start(now);
+      osc.stop(now + 0.85);
+    }
+  } catch (err) {
+    console.log("사운드 재생 제한:", err);
+  }
+}
 
 // 1. 캔버스 해상도 조절
 function resizeCanvas() {
@@ -423,32 +507,75 @@ function drawCone(ctx, x, y, w, h) {
   ctx.restore();
 }
 
-// 6) 귀여운 장애물 돌멩이 그리기
+// 6) 귀여운 장애물 진짜 바위 그리기 (동그라미가 아닌 디테일하고 입체적인 각진 다각형 바위)
 function drawRock(ctx, x, y, w, h) {
   ctx.save();
   ctx.translate(x, y);
 
   // 그림자
-  ctx.fillStyle = 'rgba(0,0,0,0.1)';
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';
   ctx.beginPath();
-  ctx.arc(0, h / 3, w / 2, 0, Math.PI * 2);
+  ctx.ellipse(0, h / 3, w * 0.55, h * 0.25, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // 돌 몸체
-  ctx.fillStyle = '#A55EEA';
-  ctx.beginPath();
-  ctx.arc(0, 0, w / 2, 0, Math.PI * 2);
-  ctx.fill();
-  
+  // 각진 입체 다각형 바위 그리기
   ctx.strokeStyle = '#2F3640';
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 3.5;
+  ctx.lineJoin = 'round';
+
+  // 1. 왼쪽 뒤쪽 음영면 (어두운 회색)
+  ctx.fillStyle = '#7F8C8D';
+  ctx.beginPath();
+  ctx.moveTo(-w/2, h/4);
+  ctx.lineTo(-w/3, -h/3);
+  ctx.lineTo(0, -h/2);
+  ctx.lineTo(-w/8, h/6);
+  ctx.closePath();
+  ctx.fill();
   ctx.stroke();
 
-  // 하이라이트
-  ctx.fillStyle = '#D6A2E8';
+  // 2. 오른쪽 메인 면 (중간 회색)
+  ctx.fillStyle = '#95A5A6';
   ctx.beginPath();
-  ctx.arc(-w / 6, -h / 6, w / 5, 0, Math.PI * 2);
+  ctx.moveTo(0, -h/2);
+  ctx.lineTo(w/2.5, -h/4);
+  ctx.lineTo(w/2, h/3);
+  ctx.lineTo(w/6, h/2);
+  ctx.lineTo(-w/8, h/6);
+  ctx.closePath();
   ctx.fill();
+  ctx.stroke();
+
+  // 3. 상단 하이라이트 면 (밝은 회색)
+  ctx.fillStyle = '#BDC3C7';
+  ctx.beginPath();
+  ctx.moveTo(-w/3, -h/3);
+  ctx.lineTo(0, -h/2);
+  ctx.lineTo(w/2.5, -h/4);
+  ctx.lineTo(0, -h/6);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // 4. 바위 바닥 면
+  ctx.fillStyle = '#7F8C8D';
+  ctx.beginPath();
+  ctx.moveTo(-w/2, h/4);
+  ctx.lineTo(-w/8, h/6);
+  ctx.lineTo(w/6, h/2);
+  ctx.lineTo(-w/3, h/2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // 갈라진 틈새 크랙 데코 추가
+  ctx.strokeStyle = '#2F3640';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(0, -h/6);
+  ctx.lineTo(-w/5, -h/25);
+  ctx.lineTo(-w/7, h/10);
+  ctx.stroke();
 
   ctx.restore();
 }
@@ -689,6 +816,8 @@ function updateHeartsUI() {
 
 // 게임 시작 초기화
 function startGame() {
+  initAudio();
+  playSound('item'); // 게임 시작 뾰로롱
   gameState = 'PLAYING';
   score = 0;
   lives = 3;
@@ -731,6 +860,7 @@ function startGame() {
 
 // 게임 오버
 function triggerGameOver() {
+  playSound('gameover'); // 패배 하강 멜로디
   gameState = 'GAMEOVER';
   if (score > highscore) {
     highscore = score;
@@ -748,6 +878,7 @@ function handleCollision(obsIndex) {
   // 오일 드럼통일 때는 하트 감소가 아닌 화면 방해 기믹만 작동!
   if (obs.type === 'oildrum') {
     obstacles.splice(obsIndex, 1);
+    playSound('crash');
     createCrashParticles(obs.x, obs.y, '#2F3640');
     // 화면에 물감/오일 튀김 생성
     triggerScreenOil();
@@ -760,6 +891,7 @@ function handleCollision(obsIndex) {
   // 부스터 피버 모드일 땐 부딪혀도 장애물이 그냥 터져서 날아감
   if (boosterTime > 0) {
     obstacles.splice(obsIndex, 1);
+    playSound('crash');
     createCrashParticles(obs.x, obs.y, '#FFD700');
     addFloatingText(obs.x, obs.y, "파괴!!", "#00DEC9");
     shakeTime = 6;
@@ -772,6 +904,7 @@ function handleCollision(obsIndex) {
   if (activeShield) {
     activeShield = false;
     obstacles.splice(obsIndex, 1);
+    playSound('item'); // 가벼운 사운드
     createCrashParticles(obs.x, obs.y, '#81ECEC');
     addFloatingText(car.x, car.y - 40, "SHIELD BLOCK!", "#00CEC9");
     shakeTime = 10;
@@ -782,6 +915,7 @@ function handleCollision(obsIndex) {
 
   // 일반 충돌 시 라이프 차감
   obstacles.splice(obsIndex, 1);
+  playSound('crash');
   lives--;
   updateHeartsUI();
   
@@ -979,7 +1113,7 @@ function update() {
   if (spawnTimer > spawnInterval) {
     spawnTimer = 0;
     // 게임 진행 속도에 따라 서서히 빨라짐
-    spawnInterval = Math.max(50, 110 - (targetSpeed * 6));
+    spawnInterval = Math.max(38, 75 - (targetSpeed * 4.5));
 
     const rng = Math.random();
 
@@ -1080,19 +1214,23 @@ function update() {
       // 아이템 효과 발현!
       if (it.type === 'coin') {
         score += 150;
+        playSound('coin');
         addFloatingText(it.x, it.y, "+150 COIN!", "#FED330");
         createCrashParticles(it.x, it.y, '#FFD700');
       } else if (it.type === 'shield') {
         activeShield = true;
+        playSound('item');
         addFloatingText(car.x, car.y - 45, "보호막 장착 🛡️", "#00CEC9");
         createCrashParticles(it.x, it.y, '#81ECEC');
       } else if (it.type === 'magnet') {
         magnetTime = MAGNET_DURATION;
+        playSound('item');
         addFloatingText(car.x, car.y - 45, "코인 자석 활성 🧲", "#FF7675");
         createCrashParticles(it.x, it.y, '#FF7675');
       } else if (it.type === 'booster') {
         boosterTime = BOOSTER_DURATION;
         invincibleTime = BOOSTER_DURATION + 30; // 부스터 중에는 완벽 무적 제공!
+        playSound('booster');
         addFloatingText(car.x, car.y - 45, "슈퍼 피버 부스터!! ⚡", "#00DEC9");
         createCrashParticles(it.x, it.y, '#FFD700');
         shakeTime = 30;
