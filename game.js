@@ -189,32 +189,48 @@ window.addEventListener('keyup', (e) => {
   keys[e.key] = false;
 });
 
-// 3. 모바일 터치 이벤트 핸들링
+// 3. 모바일 터치 이벤트 핸들링 (touchstart와 mousedown의 스마트폰 중복 트리거 방지)
+// 스마트폰에서는 touch와 mouse가 연속 트리거되어 순간 가속도가 2배가 되는 현상이 있었습니다.
+// e.stopPropagation() 및 mousedown에서의 터치 디바이스 판별 처리를 추가하여 이를 완벽히 방어합니다.
+let isTouchDevice = false;
+
 touchLeft.addEventListener('touchstart', (e) => {
   e.preventDefault();
+  e.stopPropagation();
+  isTouchDevice = true;
   touchLeftPressed = true;
 }, { passive: false });
 
 touchRight.addEventListener('touchstart', (e) => {
   e.preventDefault();
+  e.stopPropagation();
+  isTouchDevice = true;
   touchRightPressed = true;
 }, { passive: false });
 
 touchLeft.addEventListener('touchend', (e) => {
   e.preventDefault();
+  e.stopPropagation();
   touchLeftPressed = false;
 }, { passive: false });
 
 touchRight.addEventListener('touchend', (e) => {
   e.preventDefault();
+  e.stopPropagation();
   touchRightPressed = false;
 }, { passive: false });
 
-touchLeft.addEventListener('mousedown', () => touchLeftPressed = true);
+touchLeft.addEventListener('mousedown', (e) => {
+  if (isTouchDevice) return; // 모바일이면 터치가 우선하므로 마우스 리스너 무시
+  touchLeftPressed = true;
+});
 touchLeft.addEventListener('mouseup', () => touchLeftPressed = false);
 touchLeft.addEventListener('mouseleave', () => touchLeftPressed = false);
 
-touchRight.addEventListener('mousedown', () => touchRightPressed = true);
+touchRight.addEventListener('mousedown', (e) => {
+  if (isTouchDevice) return;
+  touchRightPressed = true;
+});
 touchRight.addEventListener('mouseup', () => touchRightPressed = false);
 touchRight.addEventListener('mouseleave', () => touchRightPressed = false);
 
@@ -1007,42 +1023,44 @@ function update() {
   // 1. 부스터 모드 여부에 따른 스피드 가중치
   let targetSpeed = BASE_SPEED;
   if (boosterTime > 0) {
-    boosterTime--;
+    boosterTime -= dt;
     targetSpeed = MAX_SPEED + 2.0; // 시원한 미친 부스터 속도!
   } else {
     // 서서히 다이내믹하게 빨라짐
     if (gameSpeed < MAX_SPEED) {
-      gameSpeed += SPEED_INC;
+      gameSpeed += SPEED_INC * dt;
     }
     targetSpeed = gameSpeed;
   }
 
   // 2. 스크롤 누적 점수 증가 (부스터 중일 땐 점수 누적 대폭 증가)
-  score += boosterTime > 0 ? 3 : 1;
-  scoreVal.textContent = score;
+  score += (boosterTime > 0 ? 3 : 1) * (dt / 16.6);
+  scoreVal.textContent = Math.floor(score);
 
   // 3. 타이머 제어
-  if (invincibleTime > 0) invincibleTime--;
-  if (magnetTime > 0) magnetTime--;
+  if (invincibleTime > 0) invincibleTime -= dt;
+  if (magnetTime > 0) magnetTime -= dt;
 
   // 바퀴 회전 애니용 각도 증가
-  car.wheelRotation += targetSpeed * 0.15;
+  car.wheelRotation += targetSpeed * 0.15 * (dt / 16.6);
 
-  // 4. 좌우 조작 물리 적용
+  // 4. 좌우 조작 물리 적용 (deltaTime 연동 보정)
+  const moveSpeedModifier = dt;
   if (keys['ArrowLeft'] || keys['a'] || keys['A'] || touchLeftPressed) {
-    car.vx -= car.acc;
-    car.angle = Math.max(car.angle - 0.035, -0.16);
+    car.vx -= car.acc * moveSpeedModifier;
+    car.angle = Math.max(car.angle - 0.035 * moveSpeedModifier, -0.16);
   } else if (keys['ArrowRight'] || keys['d'] || keys['D'] || touchRightPressed) {
-    car.vx += car.acc;
-    car.angle = Math.min(car.angle + 0.035, 0.16);
+    car.vx += car.acc * moveSpeedModifier;
+    car.angle = Math.min(car.angle + 0.035 * moveSpeedModifier, 0.16);
   } else {
-    car.angle *= 0.8;
+    car.angle *= Math.pow(0.8, moveSpeedModifier);
   }
 
-  car.vx *= car.friction;
-  if (car.vx > car.maxVx) car.vx = car.maxVx;
-  if (car.vx < -car.maxVx) car.vx = -car.maxVx;
-  car.x += car.vx;
+  car.vx *= Math.pow(car.friction, moveSpeedModifier);
+  const maxVxWithDt = car.maxVx;
+  if (car.vx > maxVxWithDt) car.vx = maxVxWithDt;
+  if (car.vx < -maxVxWithDt) car.vx = -maxVxWithDt;
+  car.x += car.vx * moveSpeedModifier;
 
   // [버그 수정]: 안전지대 차단을 위한 도로 가장자리 복귀 가드 보강
   const leftLimit = roadX + car.width / 2;
@@ -1058,7 +1076,7 @@ function update() {
   }
 
   // 5. 도로 및 고속 스피드라인 업데이트
-  roadOffset = (roadOffset + targetSpeed) % 40;
+  roadOffset = (roadOffset + targetSpeed * dt) % 40;
 
   if (targetSpeed > 7.0 && Math.random() < 0.2) {
     // 속도감이 전면적으로 시원해짐
@@ -1070,7 +1088,7 @@ function update() {
     });
   }
   for (let i = speedLines.length - 1; i >= 0; i--) {
-    speedLines[i].y += speedLines[i].speed;
+    speedLines[i].y += speedLines[i].speed * dt;
     if (speedLines[i].y > GAME_HEIGHT) {
       speedLines.splice(i, 1);
     }
@@ -1082,9 +1100,9 @@ function update() {
   }
   for (let i = dustParticles.length - 1; i >= 0; i--) {
     const d = dustParticles[i];
-    d.x += d.vx;
-    d.y += d.vy;
-    d.alpha -= d.decay;
+    d.x += d.vx * dt;
+    d.y += d.vy * dt;
+    d.alpha -= d.decay * dt;
     if (d.alpha <= 0) {
       dustParticles.splice(i, 1);
     }
@@ -1092,9 +1110,9 @@ function update() {
 
   // 6. 도로 주변 풍경 업데이트
   sceneryObjects.forEach(obj => {
-    obj.y += targetSpeed;
+    obj.y += targetSpeed * dt;
     if (obj.type === 'windmill') {
-      obj.rot += 0.04; // 풍차 회전 각도 누적
+      obj.rot += 0.04 * dt; // 풍차 회전 각도 누적
     }
   });
   
@@ -1108,8 +1126,8 @@ function update() {
     }
   });
 
-  // 7. 장애물 및 아이템 주기적 통합 스폰 로직
-  spawnTimer++;
+  // 7. 장애물 및 아이템 주기적 통합 스폰 로직 (dt 반영)
+  spawnTimer += dt;
   if (spawnTimer > spawnInterval) {
     spawnTimer = 0;
     // 게임 진행 속도에 따라 서서히 빨라짐
@@ -1183,7 +1201,7 @@ function update() {
   // 8. 아이템 루프 처리 (자석 연출 포함)
   for (let i = gameItems.length - 1; i >= 0; i--) {
     const it = gameItems[i];
-    it.y += targetSpeed;
+    it.y += targetSpeed * dt;
 
     // 자석이 활성화 상태일 때 코인을 플레이어 차량 방향으로 중력 가속 유도
     if (magnetTime > 0 && it.type === 'coin') {
@@ -1193,9 +1211,9 @@ function update() {
       
       // 약 140px 이내의 코인을 부드럽게 차량에 흡수
       if (dist < 140) {
-        const pullForce = (140 - dist) * 0.08;
+        const pullForce = (140 - dist) * 0.08 * dt;
         it.x += (dx / dist) * pullForce;
-        it.y += (dy / dist) * pullForce - targetSpeed * 0.4;
+        it.y += (dy / dist) * pullForce - targetSpeed * 0.4 * dt;
       }
     }
 
@@ -1244,7 +1262,7 @@ function update() {
   // 9. 장애물 업데이트 및 충돌 판단
   for (let i = obstacles.length - 1; i >= 0; i--) {
     const obs = obstacles[i];
-    obs.y += targetSpeed;
+    obs.y += targetSpeed * dt;
 
     if (obs.y > GAME_HEIGHT + 30) {
       obstacles.splice(i, 1);
@@ -1470,9 +1488,19 @@ function draw() {
   ctx.restore();
 }
 
-// 60FPS 브라우저 루프
-function loop() {
-  update();
+// Delta-Time 시간 동기화 기반 루프 (모니터 주사율 60Hz~144Hz에 관계없이 똑같은 속도 보장 및 잔상 차단)
+let lastTime = performance.now();
+
+function loop(timestamp) {
+  // 경과 시간 계산 (초 단위)
+  let elapsed = timestamp - lastTime;
+  if (elapsed > 100) elapsed = 16.67; // 포커스 아웃 시 튀는 버그 제어
+  lastTime = timestamp;
+
+  // 60FPS 기준 표준 프레임 델타값 (약 1.0)
+  const dt = elapsed / 16.666;
+
+  update(dt);
   draw();
   requestAnimationFrame(loop);
 }
@@ -1489,4 +1517,4 @@ document.addEventListener('touchmove', (e) => {
 
 resizeCanvas();
 window.addEventListener('resize', resizeCanvas);
-loop();
+loop(performance.now());
