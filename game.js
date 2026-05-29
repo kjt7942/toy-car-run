@@ -1489,15 +1489,18 @@ function draw() {
 }
 
 // Delta-Time 시간 동기화 기반 루프 (모니터 주사율 60Hz~144Hz에 관계없이 똑같은 속도 보장 및 잔상 차단)
-let lastTime = performance.now();
+let lastTime = (window.performance && window.performance.now) ? window.performance.now() : Date.now();
 
 function loop(timestamp) {
-  // 경과 시간 계산 (초 단위)
-  let elapsed = timestamp - lastTime;
-  if (elapsed > 100) elapsed = 16.67; // 포커스 아웃 시 튀는 버그 제어
-  lastTime = timestamp;
+  // 모바일 브라우저(Safari 등) 최초 진입 시 timestamp 누락 방어
+  const currentTimestamp = timestamp || ((window.performance && window.performance.now) ? window.performance.now() : Date.now());
+  
+  // 경과 시간 계산
+  let elapsed = currentTimestamp - lastTime;
+  if (elapsed > 100 || elapsed < 0) elapsed = 16.67; // 포커스 아웃이나 지연 제어
+  lastTime = currentTimestamp;
 
-  // 60FPS 기준 표준 프레임 델타값 (약 1.0)
+  // 60FPS 기준 표준 프레임 델타값
   const dt = elapsed / 16.666;
 
   update(dt);
@@ -1517,4 +1520,4 @@ document.addEventListener('touchmove', (e) => {
 
 resizeCanvas();
 window.addEventListener('resize', resizeCanvas);
-loop(performance.now());
+loop((window.performance && window.performance.now) ? window.performance.now() : Date.now());
