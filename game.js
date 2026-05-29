@@ -1522,13 +1522,16 @@ startBtn.addEventListener('click', startGame);
 restartBtn.addEventListener('click', startGame);
 
 // 스마트폰 모바일 터치 대응 (click 이벤트가 간헐적으로 안 받는 브라우저 완벽 보호)
-startBtn.addEventListener('touchstart', (e) => {
+// touchstart 대신 touchend를 사용하여 확실한 사용자 제스처 이벤트로 브라우저 사운드 및 상태 변화 락 해제
+startBtn.addEventListener('touchend', (e) => {
   e.preventDefault();
+  e.stopPropagation();
   startGame();
 }, { passive: false });
 
-restartBtn.addEventListener('touchstart', (e) => {
+restartBtn.addEventListener('touchend', (e) => {
   e.preventDefault();
+  e.stopPropagation();
   startGame();
 }, { passive: false });
 
