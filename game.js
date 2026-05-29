@@ -1017,7 +1017,7 @@ function addFloatingText(x, y, text, color = '#FFD700') {
 
 // --- [게임 프레임 루프 (Update & Render)] ---
 
-function update() {
+function update(dt = 1.0) {
   if (gameState !== 'PLAYING') return;
 
   // 1. 부스터 모드 여부에 따른 스피드 가중치
