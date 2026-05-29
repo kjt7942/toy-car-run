@@ -1143,8 +1143,9 @@ function update(dt = 1.0) {
 
   // BGM 타이머 업데이트 및 연주 처리
   if (isBgmPlaying && !isSuspendedByVisibility) {
-    // 부스터 피버 중에는 템포를 1.5배 신속하게 가속
-    const tempoInterval = boosterTime > 0 ? (320 / 1.5) : 320;
+    // 기본 템포 비트를 더욱 빠르고 박진감 있게 상향 (기본 320ms -> 220ms로 속도 대폭 상향!)
+    // 부스터 피버 중에는 템포를 1.5배 신속하게 폭발 가속!
+    const tempoInterval = boosterTime > 0 ? (220 / 1.5) : 220;
     // dt를 시간(ms, 60fps 기준 프레임당 ~16.67ms)으로 환산하여 누적
     bgmTimer += dt * 16.67;
     if (bgmTimer >= tempoInterval) {
