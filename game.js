@@ -1364,10 +1364,9 @@ function update(dt = 1.0) {
       carBottom > obsTop &&
       carTop < obsBottom
     ) {
-      // [보호막 무한 유지 버그 완벽 수정]:
-      // 기존에는 일반 무적 상태(invincibleTime > 0)일 때 충돌 판정을 건너뜀으로써 activeShield 차감이 되지 않았습니다.
-      // 이제 보호막 장착 시에는 무적 타임 여부에 무관하게 강제로 handleCollision을 통과하여 보호막이 한 번만 소모되도록 처리합니다!
-      if (activeShield || invincibleTime === 0 || boosterTime > 0) {
+      // 1. 부스터 피버(boosterTime > 0) 중이거나, 보호막이 켜져있거나(activeShield), 아예 무적 상태가 아닐 때(invincibleTime === 0)만 충돌을 감지해 처리합니다.
+      // 2. 만약 순수 무적 타이밍(invincibleTime > 0)이고 보호막도 꺼져 있다면, 깜빡거리면서 장애물을 통과하는 정상 연출이 나옵니다.
+      if (activeShield || boosterTime > 0 || invincibleTime === 0) {
         handleCollision(i);
       }
     }
