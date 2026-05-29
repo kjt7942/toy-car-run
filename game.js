@@ -22,7 +22,7 @@ const GAME_HEIGHT = 640;
 // 게임 상태 변수
 let gameState = 'START'; // START, PLAYING, GAMEOVER
 let score = 0;
-let highscore = localStorage.getItem('toycar_highscore') || 0;
+let highscore = parseInt(localStorage.getItem('toycar_highscore'), 10) || 0;
 let lives = 3;
 let keys = {};
 let touchLeftPressed = false;
@@ -90,9 +90,10 @@ let spawnInterval = 70; // 프레임당 스폰 주기 (더 촘촘하게 압박!)
 
 // --- [Web Audio API 효과음 & 레트로 BGM 시스템] ---
 let audioCtx = null;
-let bgmInterval = null; // BGM 루프용 인터벌
+let bgmTimer = 0; // dt 기반 BGM 타이머
 let bgmSequenceIndex = 0;
 let isBgmPlaying = false;
+let isSuspendedByVisibility = false; // visibilitychange로 인한 일시중지 여부
 
 // 귀여운 장난감 자동차에 어울리는 통통 튀는 레트로 8비트 베이스라인 멜로디 (도-미-솔-라 리듬)
 const BGM_MELODY = [
@@ -116,9 +117,47 @@ function initAudio() {
   }
 }
 
+// 모바일 및 데스크톱 브라우저 자동 재생 정책 해제를 위한 오디오 언락 메커니즘
+function unlockAudioContext() {
+  initAudio();
+  if (!audioCtx) return;
+  
+  if (audioCtx.state === 'suspended') {
+    // 무음 오디오 버퍼 소스를 생성해서 재생시켜 락 해제
+    const buffer = audioCtx.createBuffer(1, 1, 22050);
+    const source = audioCtx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audioCtx.destination);
+    
+    // play/start 호출 및 state 감지
+    if (source.start) {
+      source.start(0);
+    } else if (source.noteOn) {
+      source.noteOn(0);
+    }
+    
+    audioCtx.resume().then(() => {
+      console.log("AudioContext 언락 성공: " + audioCtx.state);
+      // 성공적으로 언락된 후 터치 이벤트 리스너들 제거
+      window.removeEventListener('click', unlockAudioContext);
+      window.removeEventListener('touchend', unlockAudioContext);
+    }).catch(err => {
+      console.log("AudioContext 언락 실패:", err);
+    });
+  } else {
+    // 이미 언락된 상태라면 리스너 제거
+    window.removeEventListener('click', unlockAudioContext);
+    window.removeEventListener('touchend', unlockAudioContext);
+  }
+}
+
+// 최초 제스처에 오디오 언락 이벤트 등록
+window.addEventListener('click', unlockAudioContext);
+window.addEventListener('touchend', unlockAudioContext);
+
 // 부드러운 8비트 BGM 한 음 연주 함수
 function playBgmNote() {
-  if (!audioCtx || gameState !== 'PLAYING' || isBgmPlaying === false) return;
+  if (!audioCtx || gameState !== 'PLAYING' || isBgmPlaying === false || isSuspendedByVisibility) return;
   try {
     if (audioCtx.state === 'suspended') {
       audioCtx.resume();
@@ -152,25 +191,13 @@ function playBgmNote() {
 }
 
 function startBgm() {
-  stopBgm();
   isBgmPlaying = true;
   bgmSequenceIndex = 0;
-  // 0.35초(350ms) 템포로 레트로 리듬 연주 가동
-  bgmInterval = setInterval(() => {
-    // 부스터 피버 중에는 비트 템포가 250ms로 신나게 빨라짐!
-    const currentTempo = boosterTime > 0 ? 250 : 350;
-    
-    // 실제 템포 변경 처리를 위해 동적으로 매번 체크하여 재생
-    playBgmNote();
-  }, 320); 
+  bgmTimer = 0; // 타이머 초기화
 }
 
 function stopBgm() {
   isBgmPlaying = false;
-  if (bgmInterval) {
-    clearInterval(bgmInterval);
-    bgmInterval = null;
-  }
 }
 
 function playSound(type) {
@@ -289,7 +316,19 @@ touchLeft.addEventListener('touchend', (e) => {
   touchLeftPressed = false;
 }, { passive: false });
 
+touchLeft.addEventListener('touchcancel', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  touchLeftPressed = false;
+}, { passive: false });
+
 touchRight.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  touchRightPressed = false;
+}, { passive: false });
+
+touchRight.addEventListener('touchcancel', (e) => {
   e.preventDefault();
   e.stopPropagation();
   touchRightPressed = false;
@@ -1091,11 +1130,20 @@ function addFloatingText(x, y, text, color = '#FFD700') {
   });
 }
 
-
-// --- [게임 프레임 루프 (Update & Render)] ---
-
 function update(dt = 1.0) {
   if (gameState !== 'PLAYING') return;
+
+  // BGM 타이머 업데이트 및 연주 처리
+  if (isBgmPlaying && !isSuspendedByVisibility) {
+    // 부스터 피버 중에는 템포를 1.5배 신속하게 가속
+    const tempoInterval = boosterTime > 0 ? (320 / 1.5) : 320;
+    // dt를 시간(ms, 60fps 기준 프레임당 ~16.67ms)으로 환산하여 누적
+    bgmTimer += dt * 16.67;
+    if (bgmTimer >= tempoInterval) {
+      bgmTimer -= tempoInterval;
+      playBgmNote();
+    }
+  }
 
   // 1. 부스터 모드 여부에 따른 스피드 가중치
   let targetSpeed = BASE_SPEED;
@@ -1228,26 +1276,183 @@ function update(dt = 1.0) {
         type = 'oildrum'; w = 26; h = 38; // 오일 스크린 방해형
       }
 
-      // [핵심 버그 수정 및 안전지대 타파]:
-      // 기존 3개 레인 정가운데 스폰에서 탈피하여 좌우 미세 오프셋 무작위 추가, 
-      // 최좌측 및 최우측 도로 가장자리까지 커버되도록 넓고 정교한 타겟 스폰 실시!
-      let spawnX;
-      if (type === 'barrier') {
-        // 넓은 바리케이드는 도로 내부 무작위 중심부에 정밀 배치
-        spawnX = Math.random() * (roadWidth - w) + roadX + w/2;
-      } else {
-        // 일반 장애물: 도로의 최좌측 경계(roadX)부터 최우측 경계(roadX + roadWidth)까지 
-        // 꼼수가 완전히 없도록 완전 무작위 촘촘 스폰 설계!
-        spawnX = Math.random() * (roadWidth - w - 8) + roadX + w/2 + 4;
+      // 회피 불가능한 겹침 스폰 차단:
+      // 신규 장애물을 추가하기 전에 기존 obstacles 배열의 가장 마지막 장애물(가장 최근 스폰)과 Y 거리를 검증하여 최소 140px 이상의 충분한 회피 통로 간격을 보장하도록 설계
+      let safeToSpawn = true;
+      if (obstacles.length > 0) {
+        const lastObstacle = obstacles[obstacles.length - 1];
+        if (lastObstacle.y < 100) { // Y 거리가 최소 140px 이하 (신규 Y가 -40이므로 last.y - (-40) = last.y + 40이 140보다 커야 함, 즉 last.y > 100 이어야 충분한 간격 보장)
+          safeToSpawn = false;
+        }
       }
 
-      obstacles.push({
+      if (safeToSpawn) {
+        // [핵심 버그 수정 및 안전지대 타파]:
+        // 기존 3개 레인 정가운데 스폰에서 탈피하여 좌우 미세 오프셋 무작위 추가, 
+        // 최좌측 및 최우측 도로 가장자리까지 커버되도록 넓고 정교한 타겟 스폰 실시!
+        let spawnX;
+        if (type === 'barrier') {
+          // 넓은 바리케이드는 도로 내부 무작위 중심부에 정밀 배치
+          spawnX = Math.random() * (roadWidth - w) + roadX + w/2;
+        } else {
+          // 일반 장애물: 도로의 최좌측 경계(roadX)부터 최우측 경계(roadX + roadWidth)까지 
+          // 꼼수가 완전히 없도록 완전 무작위 촘촘 스폰 설계!
+          spawnX = Math.random() * (roadWidth - w - 8) + roadX + w/2 + 4;
+        }
+
+        obstacles.push({
+          x: spawnX,
+          y: -40,
+          width: w,
+          height: h,
+          type: type
+        });
+      }
+
+    } else {
+      // --- [아이템 스폰] ---
+      const itemRoll = Math.random();
+      let itype = 'coin';
+      if (itemRoll < 0.70) {
+        itype = 'coin';
+      } else if (itemRoll < 0.82) {
+        itype = 'shield';
+      } else if (itemRoll < 0.92) {
+        itype = 'magnet';
+      } else {
+        itype = 'booster';
+      }
+
+      // 아이템 역시 도로 위 다양한 영역에 무작위 배치
+      const spawnX = Math.random() * (roadWidth - 30) + roadX + 15;
+      gameItems.push({
         x: spawnX,
-        y: -40,
-        width: w,
-        height: h,
-        type: type
+        y: -30,
+        width: itype === 'coin' ? 20 : 25,
+        height: itype === 'coin' ? 20 : 25,
+        type: itype
       });
+    }
+  }
+
+  // 8. 아이템 루프 처리 (자석 연출 포함)
+  for (let i = gameItems.length - 1; i >= 0; i--) {
+    const it = gameItems[i];
+    it.y += targetSpeed * dt;
+
+    // 자석이 활성화 상태일 때 코인을 플레이어 차량 방향으로 중력 가속 유도
+    if (magnetTime > 0 && it.type === 'coin') {
+      const dx = car.x - it.x;
+      const dy = car.y - it.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      
+      // 약 140px 이내의 코인을 부드럽게 차량에 흡수
+      if (dist < 140) {
+        const pullForce = (140 - dist) * 0.08 * dt;
+        it.x += (dx / dist) * pullForce;
+        it.y += (dy / dist) * pullForce - targetSpeed * 0.4 * dt;
+      }
+    }
+
+    // 화면 아웃 처리
+    if (it.y > GAME_HEIGHT + 30) {
+      gameItems.splice(i, 1);
+      continue;
+    }
+
+    // 플레이어 충돌 판정 (아이템)
+    const itScale = 0.85;
+    if (
+      Math.abs(car.x - it.x) < (car.width + it.width) * 0.5 * itScale &&
+      Math.abs(car.y - it.y) < (car.height + it.height) * 0.5 * itScale
+    ) {
+      // 아이템 효과 발현!
+      if (it.type === 'coin') {
+        score += 150;
+        playSound('coin');
+        addFloatingText(it.x, it.y, "+150 COIN!", "#FED330");
+        createCrashParticles(it.x, it.y, '#FFD700');
+      } else if (it.type === 'shield') {
+        activeShield = true;
+        playSound('item');
+        addFloatingText(car.x, car.y - 45, "보호막 장착 🛡️", "#00CEC9");
+        createCrashParticles(it.x, it.y, '#81ECEC');
+      } else if (it.type === 'magnet') {
+        magnetTime = MAGNET_DURATION;
+        playSound('item');
+        addFloatingText(car.x, car.y - 45, "코인 자석 활성 🧲", "#FF7675");
+        createCrashParticles(it.x, it.y, '#FF7675');
+      } else if (it.type === 'booster') {
+        boosterTime = BOOSTER_DURATION;
+        invincibleTime = BOOSTER_DURATION + 30; // 부스터 중에는 완벽 무적 제공!
+        playSound('booster');
+        addFloatingText(car.x, car.y - 45, "슈퍼 피버 부스터!! ⚡", "#00DEC9");
+        createCrashParticles(it.x, it.y, '#FFD700');
+        shakeTime = 30;
+        shakeAmount = 6;
+      }
+
+      gameItems.splice(i, 1);
+    }
+  }
+
+  // 9. 장애물 업데이트 및 충돌 판단
+  for (let i = obstacles.length - 1; i >= 0; i--) {
+    const obs = obstacles[i];
+    obs.y += targetSpeed * dt;
+
+    if (obs.y > GAME_HEIGHT + 30) {
+      obstacles.splice(i, 1);
+      continue;
+    }
+
+    // 고도화된 충돌 판정 박스 (회전 각도 정밀 보정 및 내부 마진 적용)
+    // 차량 폭에 각도에 따른 수축 가중치(Math.cos(car.angle))를 적용하고, 억울한 충돌 방지를 위한 마진 패딩 적용
+    const angleCos = Math.abs(Math.cos(car.angle));
+    const angleSin = Math.abs(Math.sin(car.angle));
+    
+    // 회전에 의해 실제로 투영되는 가상의 폭과 높이 산출 (회전 각도 보정 가중치와 안전 마진 적용)
+    // base hitBoxScale = 0.65. 각도가 0이 아닐 때 Math.cos(car.angle)을 통해 수축 연동.
+    const baseScale = 0.65;
+    
+    // 폭에는 회전 각도가 있을 때 억울함을 덜 느끼도록 Math.cos(car.angle) 수축 가중치를 추가로 적용 (회전 시 차량의 유효 가로 폭 충돌 감지 축소)
+    const carWidthScale = baseScale * angleCos;
+    const carHeightScale = baseScale;
+
+    const carLeft = car.x - (car.width * carWidthScale) / 2;
+    const carRight = car.x + (car.width * carWidthScale) / 2;
+    const carTop = car.y - (car.height * carHeightScale) / 2;
+    const carBottom = car.y + (car.height * carHeightScale) / 2;
+
+    const obsLeft = obs.x - (obs.width * 0.6) / 2;
+    const obsRight = obs.x + (obs.width * 0.6) / 2;
+    const obsTop = obs.y - (obs.height * 0.6) / 2;
+    const obsBottom = obs.y + (obs.height * 0.6) / 2;
+
+    if (
+      carRight > obsLeft &&
+      carLeft < obsRight &&
+      carBottom > obsTop &&
+      carTop < obsBottom
+    ) {
+      // 1. 부스터 피버(boosterTime > 0) 중이거나, 보호막이 켜져있거나(activeShield), 아예 무적 상태가 아닐 때(invincibleTime === 0)만 충돌을 감지해 처리합니다.
+      // 2. 만약 순수 무적 타이밍(invincibleTime > 0)이고 보호막도 꺼져 있다면, 깜빡거리면서 장애물을 통과하는 정상 연출이 나옵니다.
+      if (activeShield || boosterTime > 0 || invincibleTime === 0) {
+        handleCollision(i);
+      }
+    }
+  }
+
+  // 10. 충돌 스파크 파티클 업데이트
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.alpha -= p.decay * dt;
+    if (p.alpha <= 0) {
+      particles.splice(i, 1);
+    }
+  }
 
     } else {
       // --- [아이템 스폰] ---
@@ -1610,6 +1815,24 @@ document.addEventListener('touchmove', (e) => {
     e.preventDefault();
   }
 }, { passive: false });
+
+// 백그라운드 포커스 전환 대응 (visibilitychange 리스너)
+document.addEventListener('visibilitychange', () => {
+  initAudio();
+  if (!audioCtx) return;
+
+  if (document.hidden) {
+    isSuspendedByVisibility = true;
+    audioCtx.suspend().then(() => {
+      console.log("AudioContext 일시중지 완료");
+    });
+  } else {
+    isSuspendedByVisibility = false;
+    audioCtx.resume().then(() => {
+      console.log("AudioContext 재개 완료");
+    });
+  }
+});
 
 resizeCanvas();
 window.addEventListener('resize', resizeCanvas);
