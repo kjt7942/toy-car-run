@@ -1454,32 +1454,6 @@ function update(dt = 1.0) {
     }
   }
 
-    } else {
-      // --- [아이템 스폰] ---
-      const itemRoll = Math.random();
-      let itype = 'coin';
-      if (itemRoll < 0.70) {
-        itype = 'coin';
-      } else if (itemRoll < 0.82) {
-        itype = 'shield';
-      } else if (itemRoll < 0.92) {
-        itype = 'magnet';
-      } else {
-        itype = 'booster';
-      }
-
-      // 아이템 역시 도로 위 다양한 영역에 무작위 배치
-      const spawnX = Math.random() * (roadWidth - 30) + roadX + 15;
-      gameItems.push({
-        x: spawnX,
-        y: -30,
-        width: itype === 'coin' ? 20 : 25,
-        height: itype === 'coin' ? 20 : 25,
-        type: itype
-      });
-    }
-  }
-
   // 8. 아이템 루프 처리 (자석 연출 포함)
   for (let i = gameItems.length - 1; i >= 0; i--) {
     const it = gameItems[i];
