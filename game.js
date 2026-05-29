@@ -119,35 +119,39 @@ function initAudio() {
 
 // 모바일 및 데스크톱 브라우저 자동 재생 정책 해제를 위한 오디오 언락 메커니즘
 function unlockAudioContext() {
-  initAudio();
-  if (!audioCtx) return;
-  
-  if (audioCtx.state === 'suspended') {
-    // 무음 오디오 버퍼 소스를 생성해서 재생시켜 락 해제
-    const buffer = audioCtx.createBuffer(1, 1, 22050);
-    const source = audioCtx.createBufferSource();
-    source.buffer = buffer;
-    source.connect(audioCtx.destination);
+  try {
+    initAudio();
+    if (!audioCtx) return;
     
-    // play/start 호출 및 state 감지
-    if (source.start) {
-      source.start(0);
-    } else if (source.noteOn) {
-      source.noteOn(0);
-    }
-    
-    audioCtx.resume().then(() => {
-      console.log("AudioContext 언락 성공: " + audioCtx.state);
-      // 성공적으로 언락된 후 터치 이벤트 리스너들 제거
+    if (audioCtx.state === 'suspended') {
+      // 무음 오디오 버퍼 소스를 생성해서 재생시켜 락 해제
+      const buffer = audioCtx.createBuffer(1, 1, 22050);
+      const source = audioCtx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(audioCtx.destination);
+      
+      // play/start 호출 및 state 감지
+      if (source.start) {
+        source.start(0);
+      } else if (source.noteOn) {
+        source.noteOn(0);
+      }
+      
+      audioCtx.resume().then(() => {
+        console.log("AudioContext 언락 성공: " + audioCtx.state);
+        // 성공적으로 언락된 후 터치 이벤트 리스너들 제거
+        window.removeEventListener('click', unlockAudioContext);
+        window.removeEventListener('touchend', unlockAudioContext);
+      }).catch(err => {
+        console.log("AudioContext 언락 실패:", err);
+      });
+    } else {
+      // 이미 언락된 상태라면 리스너 제거
       window.removeEventListener('click', unlockAudioContext);
       window.removeEventListener('touchend', unlockAudioContext);
-    }).catch(err => {
-      console.log("AudioContext 언락 실패:", err);
-    });
-  } else {
-    // 이미 언락된 상태라면 리스너 제거
-    window.removeEventListener('click', unlockAudioContext);
-    window.removeEventListener('touchend', unlockAudioContext);
+    }
+  } catch (e) {
+    console.log("오디오 언락 처리 예외 (안전 조치 패스):", e);
   }
 }
 
