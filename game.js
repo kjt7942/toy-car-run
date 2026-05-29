@@ -1439,9 +1439,9 @@ function update(dt = 1.0) {
       carBottom > obsTop &&
       carTop < obsBottom
     ) {
-      // 1. 부스터 피버(boosterTime > 0) 중이거나, 보호막이 켜져있거나(activeShield), 아예 무적 상태가 아닐 때(invincibleTime === 0)만 충돌을 감지해 처리합니다.
+      // 1. 부스터 피버(boosterTime > 0) 중이거나, 보호막이 켜져있거나(activeShield), 아예 무적 상태가 아닐 때(invincibleTime <= 0)만 충돌을 감지해 처리합니다.
       // 2. 만약 순수 무적 타이밍(invincibleTime > 0)이고 보호막도 꺼져 있다면, 깜빡거리면서 장애물을 통과하는 정상 연출이 나옵니다.
-      if (activeShield || boosterTime > 0 || invincibleTime === 0) {
+      if (activeShield || boosterTime > 0 || invincibleTime <= 0) {
         handleCollision(i);
       }
     }
