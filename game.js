@@ -88,8 +88,19 @@ let gameItems = [];
 let spawnTimer = 0;
 let spawnInterval = 70; // 프레임당 스폰 주기 (더 촘촘하게 압박!)
 
-// --- [Web Audio API 효과음 플레이어] ---
+// --- [Web Audio API 효과음 & 레트로 BGM 시스템] ---
 let audioCtx = null;
+let bgmInterval = null; // BGM 루프용 인터벌
+let bgmSequenceIndex = 0;
+let isBgmPlaying = false;
+
+// 귀여운 장난감 자동차에 어울리는 통통 튀는 레트로 8비트 베이스라인 멜로디 (도-미-솔-라 리듬)
+const BGM_MELODY = [
+  261.63, 329.63, 392.00, 440.00, // C4 - E4 - G4 - A4
+  349.23, 440.00, 523.25, 587.33, // F4 - A4 - C5 - D5
+  392.00, 493.88, 587.33, 659.25, // G4 - B4 - D5 - E5
+  261.63, 329.63, 392.00, 523.25  // C4 - E4 - G4 - C5
+];
 
 function initAudio() {
   if (!audioCtx) {
@@ -100,8 +111,65 @@ function initAudio() {
       }
     } catch (e) {
       console.log("AudioContext 초기화 에러:", e);
-      audioCtx = null; // 오디오 미지원 디바이스 완벽 폴백
+      audioCtx = null;
     }
+  }
+}
+
+// 부드러운 8비트 BGM 한 음 연주 함수
+function playBgmNote() {
+  if (!audioCtx || gameState !== 'PLAYING' || isBgmPlaying === false) return;
+  try {
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+    
+    const osc = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+    
+    osc.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+    
+    // 장난감 신디사이저 느낌의 부드러운 삼각파 사용
+    osc.type = 'triangle';
+    const noteFreq = BGM_MELODY[bgmSequenceIndex];
+    
+    // 고속 질주 피버(부스터) 중일 때는 음악 템포와 피치 1.3배 상승!
+    const speedMultiplier = boosterTime > 0 ? 1.3 : 1.0;
+    osc.frequency.setValueAtTime(noteFreq * speedMultiplier, audioCtx.currentTime);
+    
+    gainNode.gain.setValueAtTime(0.04, audioCtx.currentTime); // 배경음이므로 아주 부드럽고 잔잔하게 4% 볼륨
+    gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.28);
+    
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.3);
+    
+    // 다음 음으로 순환
+    bgmSequenceIndex = (bgmSequenceIndex + 1) % BGM_MELODY.length;
+  } catch (err) {
+    console.log("BGM 연주 예외:", err);
+  }
+}
+
+function startBgm() {
+  stopBgm();
+  isBgmPlaying = true;
+  bgmSequenceIndex = 0;
+  // 0.35초(350ms) 템포로 레트로 리듬 연주 가동
+  bgmInterval = setInterval(() => {
+    // 부스터 피버 중에는 비트 템포가 250ms로 신나게 빨라짐!
+    const currentTempo = boosterTime > 0 ? 250 : 350;
+    
+    // 실제 템포 변경 처리를 위해 동적으로 매번 체크하여 재생
+    playBgmNote();
+  }, 320); 
+}
+
+function stopBgm() {
+  isBgmPlaying = false;
+  if (bgmInterval) {
+    clearInterval(bgmInterval);
+    bgmInterval = null;
   }
 }
 
@@ -110,7 +178,6 @@ function playSound(type) {
     initAudio();
     if (!audioCtx) return;
     
-    // 브라우저 자동재생 제한 우회
     if (audioCtx.state === 'suspended') {
       audioCtx.resume();
     }
@@ -124,7 +191,7 @@ function playSound(type) {
     const now = audioCtx.currentTime;
 
     if (type === 'coin') {
-      // 높은 톤의 "띠링♪" 소리
+      // 맑은 높은 톤의 "띠링♪" 소리
       osc.type = 'sine';
       osc.frequency.setValueAtTime(587.33, now); // D5
       osc.frequency.setValueAtTime(880.00, now + 0.08); // A5
@@ -134,46 +201,46 @@ function playSound(type) {
       osc.stop(now + 0.25);
     } 
     else if (type === 'item') {
-      // "뾰로롱↑" 주파수 상승
+      // 뾰로롱 상승 효과음
       osc.type = 'triangle';
-      osc.frequency.setValueAtTime(330, now); // E4
+      osc.frequency.setValueAtTime(330, now); 
       osc.frequency.exponentialRampToValueAtTime(990, now + 0.35);
-      gainNode.gain.setValueAtTime(0.15, now);
+      gainNode.gain.setValueAtTime(0.14, now);
       gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
       osc.start(now);
       osc.stop(now + 0.38);
     } 
     else if (type === 'booster') {
-      // 제트기 가속 사운드!
+      // 제트기 슈우우웅 가속 효과음
       osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(150, now);
-      osc.frequency.exponentialRampToValueAtTime(1200, now + 0.8);
-      gainNode.gain.setValueAtTime(0.1, now);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.85);
+      osc.frequency.setValueAtTime(180, now);
+      osc.frequency.exponentialRampToValueAtTime(1300, now + 0.85);
+      gainNode.gain.setValueAtTime(0.15, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
       osc.start(now);
-      osc.stop(now + 0.85);
+      osc.stop(now + 0.9);
     } 
     else if (type === 'crash') {
-      // 폭발음 "쾅!" (노이즈 필터 또는 삼각파 디케이)
+      // 쾅! 하는 둔탁한 폭발성 소리
       osc.type = 'sawtooth';
       osc.frequency.setValueAtTime(220, now);
       osc.frequency.linearRampToValueAtTime(40, now + 0.4);
-      gainNode.gain.setValueAtTime(0.3, now);
+      gainNode.gain.setValueAtTime(0.28, now);
       gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
       osc.start(now);
       osc.stop(now + 0.45);
     } 
     else if (type === 'gameover') {
-      // 하강하는 레트로 아케이드 패배음
+      // 멜랑꼴리한 패배 하강 멜로디
       osc.type = 'sawtooth';
       osc.frequency.setValueAtTime(440, now);
       osc.frequency.setValueAtTime(349.23, now + 0.15); // F4
       osc.frequency.setValueAtTime(293.66, now + 0.3);  // D4
-      osc.frequency.linearRampToValueAtTime(110, now + 0.8);
+      osc.frequency.linearRampToValueAtTime(110, now + 0.85);
       gainNode.gain.setValueAtTime(0.18, now);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.85);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
       osc.start(now);
-      osc.stop(now + 0.85);
+      osc.stop(now + 0.9);
     }
   } catch (err) {
     console.log("사운드 재생 제한:", err);
@@ -841,6 +908,7 @@ function updateHeartsUI() {
 // 게임 시작 초기화
 function startGame() {
   initAudio();
+  startBgm(); // 레트로 배경음 실행
   playSound('item'); // 게임 시작 뾰로롱
   gameState = 'PLAYING';
   score = 0;
@@ -884,6 +952,7 @@ function startGame() {
 
 // 게임 오버
 function triggerGameOver() {
+  stopBgm(); // 배경음 중단
   playSound('gameover'); // 패배 하강 멜로디
   gameState = 'GAMEOVER';
   if (score > highscore) {
@@ -1295,8 +1364,10 @@ function update(dt = 1.0) {
       carBottom > obsTop &&
       carTop < obsBottom
     ) {
-      // 부스터 중이 아니고 일반 무적 타이밍 아닐 때 충돌
-      if (invincibleTime === 0 || boosterTime > 0) {
+      // [보호막 무한 유지 버그 완벽 수정]:
+      // 기존에는 일반 무적 상태(invincibleTime > 0)일 때 충돌 판정을 건너뜀으로써 activeShield 차감이 되지 않았습니다.
+      // 이제 보호막 장착 시에는 무적 타임 여부에 무관하게 강제로 handleCollision을 통과하여 보호막이 한 번만 소모되도록 처리합니다!
+      if (activeShield || invincibleTime === 0 || boosterTime > 0) {
         handleCollision(i);
       }
     }
