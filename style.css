@@ -386,6 +386,314 @@ html, body {
   box-shadow: 0 2px 0px var(--dark);
 }
 
+/* 보조 버튼 (기록 / 차고 / 음소거) */
+.btn-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.btn-secondary {
+  flex: 1;
+  background: var(--white);
+  color: var(--dark);
+  border: 3px solid var(--dark);
+  border-radius: var(--radius-md);
+  padding: 9px 6px;
+  font-size: 0.95rem;
+  font-family: var(--font-family);
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0 4px 0px var(--dark);
+  transition: all 0.1s ease;
+}
+
+.btn-secondary:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0px var(--dark);
+}
+
+.btn-icon {
+  flex: 0 0 52px;
+}
+
+/* 기록/차고 화면은 내용이 길어 스크롤을 허용 */
+.screen-content.scrollable {
+  max-height: 86%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.game-title.small {
+  font-size: 1.7rem;
+  margin-bottom: 16px;
+}
+
+.section-title {
+  font-size: 1.1rem;
+  color: var(--dark);
+  text-align: left;
+  margin: 18px 0 8px;
+  padding-bottom: 4px;
+  border-bottom: 3px solid var(--dark);
+}
+
+.section-sub {
+  font-size: 0.85rem;
+  color: #747D8C;
+  float: right;
+  font-weight: 700;
+}
+
+/* 통계 그리드 */
+.stat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.stat-cell {
+  background: #F1F2F6;
+  border: 3px solid var(--dark);
+  border-radius: var(--radius-md);
+  padding: 10px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.stat-cell > span {
+  font-size: 0.78rem;
+  color: #747D8C;
+  font-weight: 700;
+}
+
+.stat-cell > b {
+  font-size: 1.2rem;
+  color: var(--dark);
+}
+
+/* TOP 5 순위표 */
+.rank-list {
+  list-style: none;
+  text-align: left;
+}
+
+.rank-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #F1F2F6;
+  border: 2.5px solid var(--dark);
+  border-radius: 10px;
+  padding: 7px 12px;
+  margin-bottom: 6px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--dark);
+}
+
+.rank-list li.empty {
+  justify-content: center;
+  color: #A4B0BE;
+  border-style: dashed;
+}
+
+.rank-list .rank-num {
+  color: var(--accent-color);
+  margin-right: 8px;
+}
+
+/* 도전과제 목록 */
+.ach-list {
+  list-style: none;
+  text-align: left;
+}
+
+.ach-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: #F1F2F6;
+  border: 2.5px solid #CED6E0;
+  border-radius: 10px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  opacity: 0.55;
+}
+
+.ach-list li.done {
+  opacity: 1;
+  border-color: var(--dark);
+  background: #FFF9E0;
+}
+
+.ach-icon {
+  font-size: 1.15rem;
+  line-height: 1.3;
+}
+
+.ach-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.ach-text > b {
+  font-size: 0.95rem;
+  color: var(--dark);
+}
+
+.ach-text > span {
+  font-size: 0.78rem;
+  color: #747D8C;
+  font-weight: 700;
+}
+
+/* 게임오버 신기록 배너 */
+.record-banner {
+  display: none;
+  background: var(--primary-color);
+  border: 3px solid var(--dark);
+  border-radius: var(--radius-md);
+  padding: 8px;
+  margin-bottom: 14px;
+  font-size: 1.1rem;
+  color: var(--dark);
+  box-shadow: 0 4px 0 var(--dark);
+  animation: bounce 1.2s infinite;
+}
+
+.record-banner.visible {
+  display: block;
+}
+
+/* 게임오버 주행 요약 */
+.run-summary {
+  display: flex;
+  justify-content: space-around;
+  margin-bottom: 16px;
+  font-size: 0.95rem;
+  color: var(--dark);
+  font-weight: 700;
+}
+
+.run-summary b {
+  color: var(--accent-color);
+}
+
+/* 새로 달성한 도전과제 알림 */
+.new-ach {
+  display: none;
+  background: #FFF9E0;
+  border: 3px dashed var(--dark);
+  border-radius: var(--radius-md);
+  padding: 10px;
+  margin-bottom: 16px;
+  font-size: 0.9rem;
+  color: var(--dark);
+  font-weight: 700;
+  text-align: left;
+}
+
+.new-ach.visible {
+  display: block;
+}
+
+.new-ach p {
+  margin-bottom: 3px;
+}
+
+/* 차고 */
+.garage-coins {
+  font-size: 1.05rem;
+  color: var(--dark);
+  margin-bottom: 14px;
+  font-weight: 700;
+}
+
+.garage-coins b {
+  color: #F39C12;
+  font-size: 1.25rem;
+}
+
+.car-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.car-card {
+  background: #F1F2F6;
+  border: 3px solid var(--dark);
+  border-radius: var(--radius-md);
+  padding: 10px 6px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  transition: transform 0.12s ease;
+}
+
+.car-card:active {
+  transform: scale(0.96);
+}
+
+.car-card.selected {
+  background: #FFF9E0;
+  box-shadow: 0 0 0 3px var(--primary-color);
+}
+
+.car-card.locked {
+  opacity: 0.75;
+  border-style: dashed;
+}
+
+.car-card.locked.affordable {
+  opacity: 1;
+  border-style: solid;
+  border-color: #F39C12;
+}
+
+.car-swatch {
+  width: 34px;
+  height: 52px;
+  border: 3px solid var(--dark);
+  border-radius: 9px;
+  position: relative;
+}
+
+.car-swatch::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 5px;
+  bottom: 5px;
+  width: 7px;
+  transform: translateX(-50%);
+  border-radius: 2px;
+  background: var(--stripe, #FF5757);
+}
+
+.car-name {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--dark);
+}
+
+.car-status {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #747D8C;
+}
+
+.car-status.owned { color: #26AE60; }
+.car-status.affordable { color: #F39C12; }
+
+.close-screen {
+  margin-top: 18px;
+}
+
 /* 모바일 터치 컨트롤 (좌우 터치 패널) */
 #touchControls {
   position: absolute;

@@ -81,6 +81,11 @@
         </div>
 
         <button id="startBtn" class="btn-primary">게임 시작하기!</button>
+        <div class="btn-row">
+          <button id="statsBtn" class="btn-secondary">🏆 기록</button>
+          <button id="garageBtn" class="btn-secondary">🚗 차고</button>
+          <button id="muteBtn" class="btn-secondary btn-icon" aria-label="소리 켜기/끄기">🔊</button>
+        </div>
       </div>
     </div>
 
@@ -89,7 +94,9 @@
       <div class="screen-content">
         <span class="emoji-logo">💥</span>
         <h1 class="game-title text-danger">앗! 부딪혔어요!</h1>
-        
+
+        <div id="recordBanner" class="record-banner">🎉 신기록 달성!</div>
+
         <div class="score-board">
           <div class="score-result">
             <span class="result-label">이번 점수</span>
@@ -101,7 +108,51 @@
           </div>
         </div>
 
+        <div class="run-summary">
+          <span>🪙 <b id="runCoinsVal">0</b></span>
+          <span>🔥 <b id="runComboVal">x1</b></span>
+          <span>📏 <b id="runDistVal">0m</b></span>
+        </div>
+
+        <div id="newAchievements" class="new-ach"></div>
+
         <button id="restartBtn" class="btn-primary btn-bounce">다시 달리기 🔄</button>
+        <div class="btn-row">
+          <button id="statsBtn2" class="btn-secondary">🏆 기록</button>
+          <button id="garageBtn2" class="btn-secondary">🚗 차고</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. 기록 & 도전과제 화면 -->
+    <div id="statsScreen" class="overlay-screen">
+      <div class="screen-content scrollable">
+        <h1 class="game-title small">🏆 나의 기록</h1>
+
+        <div class="stat-grid">
+          <div class="stat-cell"><span>주행 횟수</span><b id="statRuns">0</b></div>
+          <div class="stat-cell"><span>총 주행거리</span><b id="statDistance">0m</b></div>
+          <div class="stat-cell"><span>모은 코인</span><b id="statCoins">0</b></div>
+          <div class="stat-cell"><span>최고 콤보</span><b id="statCombo">x1</b></div>
+        </div>
+
+        <h2 class="section-title">TOP 5</h2>
+        <ol id="rankList" class="rank-list"></ol>
+
+        <h2 class="section-title">도전과제 <span id="achProgress" class="section-sub"></span></h2>
+        <ul id="achList" class="ach-list"></ul>
+
+        <button class="btn-primary close-screen">닫기</button>
+      </div>
+    </div>
+
+    <!-- 5. 차고 (차량 해금 및 선택) -->
+    <div id="garageScreen" class="overlay-screen">
+      <div class="screen-content scrollable">
+        <h1 class="game-title small">🚗 차고</h1>
+        <p class="garage-coins">보유 코인 🪙 <b id="garageCoins">0</b></p>
+        <div id="carList" class="car-list"></div>
+        <button class="btn-primary close-screen">닫기</button>
       </div>
     </div>
 

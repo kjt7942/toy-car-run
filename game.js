@@ -25,6 +25,29 @@ const badgeMagnet = document.getElementById('badgeMagnet');
 const badgeBooster = document.getElementById('badgeBooster');
 const badgeSlow = document.getElementById('badgeSlow');
 const badgeSlip = document.getElementById('badgeSlip');
+// 기록 / 차고 / 게임오버 요약 엘리먼트
+const statsScreen = document.getElementById('statsScreen');
+const garageScreen = document.getElementById('garageScreen');
+const statsBtn = document.getElementById('statsBtn');
+const statsBtn2 = document.getElementById('statsBtn2');
+const garageBtn = document.getElementById('garageBtn');
+const garageBtn2 = document.getElementById('garageBtn2');
+const muteBtn = document.getElementById('muteBtn');
+const statRuns = document.getElementById('statRuns');
+const statDistance = document.getElementById('statDistance');
+const statCoins = document.getElementById('statCoins');
+const statCombo = document.getElementById('statCombo');
+const rankList = document.getElementById('rankList');
+const achList = document.getElementById('achList');
+const achProgress = document.getElementById('achProgress');
+const garageCoins = document.getElementById('garageCoins');
+const carList = document.getElementById('carList');
+const recordBanner = document.getElementById('recordBanner');
+const runCoinsVal = document.getElementById('runCoinsVal');
+const runComboVal = document.getElementById('runComboVal');
+const runDistVal = document.getElementById('runDistVal');
+const newAchievements = document.getElementById('newAchievements');
+
 const magnetBar = badgeMagnet.querySelector('.badge-bar > i');
 const boosterBar = badgeBooster.querySelector('.badge-bar > i');
 const slowBar = badgeSlow.querySelector('.badge-bar > i');
@@ -37,7 +60,64 @@ const GAME_HEIGHT = 640;
 // 게임 상태 변수
 let gameState = 'START'; // START, PLAYING, GAMEOVER
 let score = 0;
-let highscore = parseInt(localStorage.getItem('toycar_highscore'), 10) || 0;
+
+// --- [영구 저장 데이터] ---
+// 최고 점수 하나만 남기면 다시 플레이할 이유가 없다.
+// 누적 코인·도전과제·해금 차량을 함께 저장해 판을 거듭할수록 쌓이는 것이 생기게 한다.
+const SAVE_KEY = 'toycar_save';
+const LEGACY_KEY = 'toycar_highscore';
+const MAX_RANKS = 5;
+
+function defaultSave() {
+  return {
+    best: 0,
+    scores: [],          // TOP 5 기록
+    coins: 0,            // 해금에 쓰는 누적 코인
+    runs: 0,
+    totalDistance: 0,
+    bestCombo: 1,
+    achievements: {},
+    unlocked: ['classic'],
+    selected: 'classic',
+    muted: false
+  };
+}
+
+function loadSave() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const merged = Object.assign(defaultSave(), parsed);
+      // 저장 형식이 깨져 있어도 게임이 멈추지 않도록 형태를 보정한다
+      if (!Array.isArray(merged.scores)) merged.scores = [];
+      if (!Array.isArray(merged.unlocked) || merged.unlocked.length === 0) merged.unlocked = ['classic'];
+      if (!merged.achievements || typeof merged.achievements !== 'object') merged.achievements = {};
+      return merged;
+    }
+  } catch (e) {
+    console.log('세이브 로드 실패, 새로 시작합니다:', e);
+  }
+
+  // 최고 점수만 저장하던 이전 버전에서 넘어온 경우 그 기록을 승계한다
+  const fresh = defaultSave();
+  const legacy = parseInt(localStorage.getItem(LEGACY_KEY), 10);
+  if (legacy > 0) {
+    fresh.best = legacy;
+    fresh.scores = [legacy];
+  }
+  return fresh;
+}
+
+function persistSave() {
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify(save));
+  } catch (e) {
+    console.log('세이브 저장 실패:', e);
+  }
+}
+
+const save = loadSave();
 const MAX_LIVES = 3;
 let lives = MAX_LIVES;
 let keys = {};
@@ -55,8 +135,11 @@ const SPEED_INC = 0.0015;
 // 기존에는 이미 60fps로 정규화된 dt를 16.6으로 한 번 더 나눠 주행 점수가 초당 3.6점에 그쳤다.
 // 그 탓에 전체 점수의 90% 이상이 코인에서 나와 "멀리 달리는" 재미가 죽어 있었다.
 const DISTANCE_SCORE = 1;   // 프레임당 1점 = 초당 60점
-const COIN_SCORE = 100;
-const RISKY_COIN_SCORE = 220; // 장애물 틈에 박아 둔 코인은 위험한 만큼 더 준다
+// 레벨이 오를수록 1초의 가치가 커진다. 후반일수록 한 순간을 버티기가 훨씬 어려우므로
+// 시간 보상도 같이 가팔라져야 "멀리 달린다"는 목표가 코인 줍기에 묻히지 않는다.
+const LEVEL_SCORE_BONUS = 0.5;
+const COIN_SCORE = 70;
+const RISKY_COIN_SCORE = 150; // 장애물 틈에 박아 둔 코인은 위험한 만큼 더 준다
 const NEARMISS_SCORE = 60;
 const DESTROY_SCORE = 120;
 const HEART_FULL_SCORE = 400; // 라이프가 가득 찼을 때 하트를 먹으면 점수로 환산
@@ -67,6 +150,53 @@ let comboTimer = 0;
 const COMBO_DURATION = 240; // 4초 안에 다음 획득이 없으면 콤보 소멸
 const COMBO_STEP = 3;       // 3회마다 배수 1단계 상승
 const MAX_COMBO_MULT = 8;
+
+// --- [해금 차량 스킨] ---
+// 모은 코인으로 살 수 있는 외형. 성능은 모두 동일하고 보이는 것만 달라진다.
+const CARS = [
+  { id: 'classic', name: '클래식',   cost: 0,     body: '#FFDE59', stripe: '#FF5757', spoiler: '#2F3640' },
+  { id: 'ruby',    name: '루비',     cost: 600,   body: '#FF5757', stripe: '#FFFFFF', spoiler: '#2F3640' },
+  { id: 'mint',    name: '민트',     cost: 1500,  body: '#00CEC9', stripe: '#FFFFFF', spoiler: '#2F3640' },
+  { id: 'shadow',  name: '섀도',     cost: 3000,  body: '#3D4454', stripe: '#FFDE59', spoiler: '#FFDE59' },
+  { id: 'gold',    name: '골드',     cost: 5000,  body: '#FFD700', stripe: '#B8860B', spoiler: '#B8860B' },
+  { id: 'rainbow', name: '레인보우', cost: 9000,  body: null,      stripe: '#FFFFFF', spoiler: '#2F3640' }
+];
+
+function getSelectedCar() {
+  return CARS.find(c => c.id === save.selected) || CARS[0];
+}
+
+// 레인보우는 body가 없고 매 프레임 색상환을 돈다
+function carBodyColor() {
+  const skin = getSelectedCar();
+  return skin.body || `hsl(${Math.floor(Date.now() / 12) % 360}, 85%, 62%)`;
+}
+
+// --- [도전과제] ---
+// 한 판이 끝날 때 평가한다. r은 이번 판 기록, s는 누적 세이브.
+const ACHIEVEMENTS = [
+  { id: 'first',     icon: '🚗', name: '첫 주행',       desc: '게임을 한 판 끝내기',        check: (r, s) => s.runs >= 1 },
+  { id: 'combo4',    icon: '🔥', name: '콤보 마스터',   desc: '한 판에서 콤보 x4 달성',     check: (r) => r.maxMult >= 4 },
+  { id: 'combo8',    icon: '💥', name: '콤보 지배자',   desc: '한 판에서 콤보 x8 달성',     check: (r) => r.maxMult >= 8 },
+  { id: 'coin50',    icon: '🪙', name: '코인 수집가',   desc: '한 판에서 코인 50개 획득',   check: (r) => r.coins >= 50 },
+  { id: 'nearmiss20',icon: '😱', name: '아슬아슬',      desc: '한 판에서 20번 스치기',      check: (r) => r.nearMisses >= 20 },
+  { id: 'level5',    icon: '⚡', name: '속도광',        desc: 'LV.5 도달',                  check: (r) => r.level >= 5 },
+  { id: 'level10',   icon: '🚀', name: '폭주기관차',    desc: 'LV.10 도달',                 check: (r) => r.level >= 10 },
+  { id: 'flawless',  icon: '🛡️', name: '무결점',        desc: '피격 없이 LV.4 도달',        check: (r) => r.level >= 4 && r.damage === 0 },
+  { id: 'destroy10', icon: '💣', name: '파괴왕',        desc: '한 판에서 장애물 10개 파괴', check: (r) => r.destroyed >= 10 },
+  { id: 'score10k',  icon: '🏅', name: '만점 돌파',     desc: '30,000점 달성',              check: (r) => r.score >= 30000 },
+  { id: 'score30k',  icon: '👑', name: '전설의 주행',   desc: '80,000점 달성',              check: (r) => r.score >= 80000 },
+  { id: 'far3km',    icon: '📏', name: '장거리 주자',   desc: '한 판에 3,000m 주행',        check: (r) => r.distance >= 30000 }
+];
+
+// 화면상 10px을 1m로 환산해 표시한다
+function toMeters(px) {
+  return Math.floor(px / 10);
+}
+
+// 이번 판에서만 유효한 기록 (도전과제 판정용)
+let runStats = { coins: 0, destroyed: 0, damage: 0, maxMult: 1, nearMisses: 0 };
+let recordBeaten = false;
 
 // 레벨 마일스톤.
 // 점수에 연동하면 콤보가 잘 터진 판만 난이도가 폭주해 실력이 아닌 운이 난이도를 정해 버린다.
@@ -215,6 +345,7 @@ window.addEventListener('touchend', unlockAudioContext);
 
 // 부드러운 8비트 BGM 한 음 연주 함수
 function playBgmNote() {
+  if (save.muted) return;
   if (!audioCtx || gameState !== 'PLAYING' || isBgmPlaying === false || isSuspendedByVisibility) return;
   try {
     if (audioCtx.state === 'suspended') {
@@ -259,6 +390,7 @@ function stopBgm() {
 }
 
 function playSound(type) {
+  if (save.muted) return;
   try {
     initAudio();
     if (!audioCtx) return;
@@ -401,6 +533,12 @@ window.addEventListener('keydown', (e) => {
   // 러너 장르의 생명은 "한 판만 더"의 마찰이 없는 것.
   // 대기/게임오버 상태에서 Space 또는 Enter로 즉시 재시작한다.
   if (!e.repeat && (e.key === ' ' || e.key === 'Enter') && gameState !== 'PLAYING') {
+    // 기록이나 차고를 보고 있는 중이라면 실수로 판이 시작되지 않게 막는다
+    if (statsScreen.classList.contains('active') || garageScreen.classList.contains('active')) {
+      closeScreen(statsScreen);
+      closeScreen(garageScreen);
+      return;
+    }
     startGame();
   }
 });
@@ -633,8 +771,9 @@ function drawPlayer() {
   // 뒤우측
   drawWheel(car.width / 2 + 2, car.height / 2 - 14);
 
-  // 3. 메인 바디 (기본: 노란색 장난감 카, 부스터: 스포티한 블루/네온 카)
-  ctx.fillStyle = boosterTime > 0 ? '#00DEC9' : '#FFDE59';
+  // 3. 메인 바디 (차고에서 고른 스킨 색상, 부스터 중에는 네온 블루로 전환)
+  const skin = getSelectedCar();
+  ctx.fillStyle = boosterTime > 0 ? '#00DEC9' : carBodyColor();
   ctx.beginPath();
   ctx.roundRect(-car.width / 2, -car.height / 2, car.width, car.height, 12);
   ctx.fill();
@@ -644,7 +783,7 @@ function drawPlayer() {
   ctx.stroke();
 
   // 스포티 스트라이프 데칼 라인 추가
-  ctx.fillStyle = boosterTime > 0 ? '#FFFFFF' : '#FF5757';
+  ctx.fillStyle = boosterTime > 0 ? '#FFFFFF' : skin.stripe;
   ctx.fillRect(-4, -car.height / 2 + 4, 8, car.height - 8);
 
   // 4. 유리창 (하늘색 그라데이션)
@@ -674,7 +813,7 @@ function drawPlayer() {
   ctx.stroke();
 
   // 6. 리어 윙 스포일러 (스포츠카 느낌 극대화)
-  ctx.fillStyle = boosterTime > 0 ? '#FF7675' : '#2F3640';
+  ctx.fillStyle = boosterTime > 0 ? '#FF7675' : skin.spoiler;
   ctx.beginPath();
   ctx.roundRect(-car.width / 2 - 4, car.height / 2 - 4, car.width + 8, 5, 2);
   ctx.fill();
@@ -1239,6 +1378,7 @@ function addCombo() {
   comboTimer = COMBO_DURATION;
 
   const newMult = getComboMult();
+  if (newMult > runStats.maxMult) runStats.maxMult = newMult;
   // 배수가 한 단계 올라간 순간에만 요란하게 알려준다
   if (newMult > prevMult) {
     addFloatingText(car.x, car.y - 62, `COMBO x${newMult}!`, '#FFDE59');
@@ -1273,6 +1413,116 @@ function checkLevelUp() {
   addFloatingText(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 40, `LEVEL ${level} • SPEED UP!`, '#FF5757');
   shakeTime = 14;
   shakeAmount = 5;
+}
+
+// --- [기록 / 차고 화면 렌더링] ---
+
+// 저장된 이름 등을 그대로 innerHTML에 넣지 않도록 최소한의 이스케이프
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, ch => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[ch]);
+}
+
+function renderStats() {
+  statRuns.textContent = save.runs;
+  statDistance.textContent = toMeters(save.totalDistance).toLocaleString() + 'm';
+  statCoins.textContent = save.coins.toLocaleString();
+  statCombo.textContent = 'x' + save.bestCombo;
+
+  // TOP 5
+  rankList.innerHTML = '';
+  if (save.scores.length === 0) {
+    const li = document.createElement('li');
+    li.className = 'empty';
+    li.textContent = '아직 기록이 없어요';
+    rankList.appendChild(li);
+  } else {
+    const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
+    save.scores.forEach((s, i) => {
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="rank-num">${medals[i] || (i + 1)}</span>` +
+                     `<span>${s.toLocaleString()}점</span>`;
+      rankList.appendChild(li);
+    });
+  }
+
+  // 도전과제
+  const done = ACHIEVEMENTS.filter(a => save.achievements[a.id]).length;
+  achProgress.textContent = `${done} / ${ACHIEVEMENTS.length}`;
+  achList.innerHTML = '';
+  for (const ach of ACHIEVEMENTS) {
+    const unlocked = !!save.achievements[ach.id];
+    const li = document.createElement('li');
+    li.className = unlocked ? 'done' : '';
+    li.innerHTML =
+      `<span class="ach-icon">${unlocked ? ach.icon : '🔒'}</span>` +
+      `<span class="ach-text"><b>${escapeHtml(ach.name)}</b><span>${escapeHtml(ach.desc)}</span></span>`;
+    achList.appendChild(li);
+  }
+}
+
+function renderGarage() {
+  garageCoins.textContent = save.coins.toLocaleString();
+  carList.innerHTML = '';
+
+  for (const skin of CARS) {
+    const owned = save.unlocked.includes(skin.id);
+    const selected = save.selected === skin.id;
+    const affordable = !owned && save.coins >= skin.cost;
+
+    const card = document.createElement('div');
+    card.className = 'car-card' +
+      (selected ? ' selected' : '') +
+      (owned ? '' : ' locked') +
+      (affordable ? ' affordable' : '');
+
+    // 레인보우는 미리보기에서도 색이 도는 것을 보여준다
+    const swatchColor = skin.body || 'hsl(300, 85%, 62%)';
+    const status = owned
+      ? (selected ? '<span class="car-status owned">선택됨</span>' : '<span class="car-status owned">보유</span>')
+      : `<span class="car-status${affordable ? ' affordable' : ''}">🪙 ${skin.cost.toLocaleString()}</span>`;
+
+    card.innerHTML =
+      `<div class="car-swatch" style="background:${swatchColor}; --stripe:${skin.stripe}"></div>` +
+      `<span class="car-name">${escapeHtml(skin.name)}</span>` + status;
+
+    card.addEventListener('click', () => selectOrBuyCar(skin));
+    carList.appendChild(card);
+  }
+}
+
+// 보유 중이면 선택, 아니면 코인으로 구매를 시도한다
+function selectOrBuyCar(skin) {
+  if (save.unlocked.includes(skin.id)) {
+    save.selected = skin.id;
+    playSound('item');
+  } else if (save.coins >= skin.cost) {
+    save.coins -= skin.cost;
+    save.unlocked.push(skin.id);
+    save.selected = skin.id;
+    playSound('levelup');
+  } else {
+    // 코인이 모자라면 아무 일도 일어나지 않는다
+    playSound('nearmiss');
+    return;
+  }
+  persistSave();
+  renderGarage();
+}
+
+function openScreen(screen) {
+  if (screen === statsScreen) renderStats();
+  if (screen === garageScreen) renderGarage();
+  screen.classList.add('active');
+}
+
+function closeScreen(screen) {
+  screen.classList.remove('active');
+}
+
+function updateMuteButton() {
+  muteBtn.textContent = save.muted ? '🔇' : '🔊';
 }
 
 // --- [콤보/아이템 상태 HUD 갱신] ---
@@ -1368,6 +1618,9 @@ function startGame() {
   spawnTimer = 0;
   spawnInterval = 70;
 
+  runStats = { coins: 0, destroyed: 0, damage: 0, maxMult: 1, nearMisses: 0 };
+  recordBeaten = false;
+
   car.x = GAME_WIDTH / 2;
   car.vx = 0;
   car.angle = 0;
@@ -1422,14 +1675,71 @@ function triggerGameOver() {
 
   // 실시간 획득 점수가 소수점을 가지므로 정수형으로 소수점 절사 보정
   const roundedScore = Math.floor(score);
-  
-  if (roundedScore > highscore) {
-    highscore = roundedScore;
-    localStorage.setItem('toycar_highscore', highscore);
-  }
+  const isNewRecord = roundedScore > save.best;
+
+  // 누적 기록 갱신
+  save.runs++;
+  save.coins += runStats.coins;
+  save.totalDistance += distance;
+  if (runStats.maxMult > save.bestCombo) save.bestCombo = runStats.maxMult;
+  if (isNewRecord) save.best = roundedScore;
+
+  // TOP 5 순위표 갱신
+  save.scores.push(roundedScore);
+  save.scores.sort((a, b) => b - a);
+  save.scores = save.scores.slice(0, MAX_RANKS);
+
+  const newlyUnlocked = evaluateAchievements(roundedScore);
+  persistSave();
+
   finalScore.textContent = roundedScore;
-  bestScore.textContent = highscore;
+  bestScore.textContent = save.best;
+  runCoinsVal.textContent = runStats.coins;
+  runComboVal.textContent = 'x' + runStats.maxMult;
+  runDistVal.textContent = toMeters(distance) + 'm';
+
+  recordBanner.classList.toggle('visible', isNewRecord);
+
+  // 이번 판에 새로 딴 도전과제를 결과 화면에 모아 보여준다
+  if (newlyUnlocked.length > 0) {
+    newAchievements.innerHTML = '<p><b>🎊 새 도전과제!</b></p>' +
+      newlyUnlocked.map(a => `<p>${a.icon} ${escapeHtml(a.name)}</p>`).join('');
+    newAchievements.classList.add('visible');
+  } else {
+    newAchievements.classList.remove('visible');
+  }
+
   gameOverScreen.classList.add('active');
+}
+
+// 이번 판 결과로 새로 달성한 도전과제를 가려낸다
+function evaluateAchievements(finalScoreValue) {
+  const result = {
+    score: finalScoreValue,
+    level: level,
+    distance: distance,
+    coins: runStats.coins,
+    destroyed: runStats.destroyed,
+    damage: runStats.damage,
+    maxMult: runStats.maxMult,
+    nearMisses: runStats.nearMisses
+  };
+
+  const newly = [];
+  for (const ach of ACHIEVEMENTS) {
+    if (save.achievements[ach.id]) continue;
+    let ok = false;
+    try {
+      ok = ach.check(result, save);
+    } catch (e) {
+      console.log('도전과제 판정 오류:', ach.id, e);
+    }
+    if (ok) {
+      save.achievements[ach.id] = true;
+      newly.push(ach);
+    }
+  }
+  return newly;
 }
 
 // 충돌 처리 (보호막 유무 판정)
@@ -1468,6 +1778,7 @@ function handleCollision(obsIndex) {
     playSound('crash');
     createCrashParticles(obs.x, obs.y, '#FFD700');
     addCombo();
+    runStats.destroyed++;
     const gain = gainScore(DESTROY_SCORE);
     addFloatingText(obs.x, obs.y, `파괴!! +${gain}`, "#00DEC9");
     shakeTime = 6;
@@ -1492,6 +1803,7 @@ function handleCollision(obsIndex) {
   obstacles.splice(obsIndex, 1);
   playSound('crash');
   lives--;
+  runStats.damage++;
   updateHeartsUI();
   resetCombo();
 
@@ -1826,10 +2138,22 @@ function update(dt = 1.0) {
   }
 
   // 2. 스크롤 누적 점수 및 주행 거리 증가 (부스터 중일 땐 점수 누적 대폭 증가)
-  score += DISTANCE_SCORE * (boosterTime > 0 ? 3 : 1) * dt;
+  // 콤보 배수를 주행 점수에도 적용한다. 그래야 콤보가 "먹는 순간의 보너스"에 그치지 않고
+  // 유지하는 내내 초당 수입이 불어나는 자원이 되어, 끊기는 순간의 손실이 계속 아프다.
+  const distanceRate = DISTANCE_SCORE * (1 + (level - 1) * LEVEL_SCORE_BONUS) * getComboMult();
+  score += distanceRate * (boosterTime > 0 ? 3 : 1) * dt;
   distance += targetSpeed * dt;
   scoreVal.textContent = Math.floor(score);
   checkLevelUp();
+
+  // 자기 최고 기록을 넘어서는 순간을 놓치지 않고 알려준다
+  if (!recordBeaten && save.best > 0 && score > save.best) {
+    recordBeaten = true;
+    playSound('levelup');
+    addFloatingText(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 90, '🎉 신기록 갱신!', '#FFDE59');
+    shakeTime = 12;
+    shakeAmount = 4;
+  }
 
   // 3. 타이머 제어
   if (invincibleTime > 0) invincibleTime -= dt;
@@ -1979,6 +2303,7 @@ function update(dt = 1.0) {
       // 아이템 효과 발현!
       if (it.type === 'coin') {
         addCombo();
+        runStats.coins++;
         const gain = gainScore(it.risky ? RISKY_COIN_SCORE : COIN_SCORE);
         playSound('coin');
         addFloatingText(it.x, it.y, `+${gain}`, it.risky ? "#FF5757" : "#FED330");
@@ -2088,6 +2413,7 @@ function update(dt = 1.0) {
       const gap = Math.abs(car.x - obs.x) - (car.width + obs.width) / 2;
       if (gap >= 0 && gap < 16) {
         addCombo();
+        runStats.nearMisses++;
         const gain = gainScore(NEARMISS_SCORE);
         playSound('nearmiss');
         addFloatingText(car.x, car.y - 30, `아슬아슬! +${gain}`, '#FFDE59');
@@ -2350,6 +2676,36 @@ restartBtn.addEventListener('touchend', (e) => {
   startGame();
 }, { passive: false });
 
+// 기록 / 차고 / 음소거 버튼 연결 (터치 기기에서도 확실히 반응하도록 두 이벤트 모두 등록)
+function bindTap(el, handler) {
+  if (!el) return;
+  el.addEventListener('click', handler);
+  el.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    handler();
+  }, { passive: false });
+}
+
+bindTap(statsBtn, () => openScreen(statsScreen));
+bindTap(statsBtn2, () => openScreen(statsScreen));
+bindTap(garageBtn, () => openScreen(garageScreen));
+bindTap(garageBtn2, () => openScreen(garageScreen));
+
+bindTap(muteBtn, () => {
+  save.muted = !save.muted;
+  persistSave();
+  updateMuteButton();
+  if (!save.muted) playSound('coin'); // 음소거를 풀면 소리가 살아난 걸 바로 확인시켜 준다
+});
+
+document.querySelectorAll('.close-screen').forEach(btn => {
+  bindTap(btn, () => {
+    closeScreen(statsScreen);
+    closeScreen(garageScreen);
+  });
+});
+
 document.addEventListener('touchmove', (e) => {
   if (e.scale !== 1) {
     e.preventDefault();
@@ -2375,5 +2731,6 @@ document.addEventListener('visibilitychange', () => {
 });
 
 resizeCanvas();
+updateMuteButton();
 window.addEventListener('resize', resizeCanvas);
 loop((window.performance && window.performance.now) ? window.performance.now() : Date.now());
