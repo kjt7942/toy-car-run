@@ -88,7 +88,7 @@ function defaultSave() {
     selected: 'classic',
     muted: false,
     control: 'buttons',  // 'buttons' | 'drag'
-    dragSens: 7          // 1(느긋) ~ 10(예민)
+    dragSens: 7          // 1(느긋) ~ 15(예민)
   };
 }
 
@@ -103,7 +103,7 @@ function loadSave() {
       if (!Array.isArray(merged.unlocked) || merged.unlocked.length === 0) merged.unlocked = ['classic'];
       if (!merged.achievements || typeof merged.achievements !== 'object') merged.achievements = {};
       // 감도가 깨져 있으면 조향이 아예 먹통이 되므로 범위를 강제한다
-      if (!(merged.dragSens >= 1 && merged.dragSens <= 10)) merged.dragSens = 7;
+      if (!(merged.dragSens >= 1 && merged.dragSens <= 15)) merged.dragSens = 7;
       return merged;
     }
   } catch (e) {
@@ -629,13 +629,20 @@ touchRight.addEventListener('mouseleave', () => touchRightPressed = false);
 // "어디까지 밀어야 도는지" 감을 잡을 필요가 없다.
 // 감도는 손가락 이동량 대비 차가 따라오는 비율이다.
 let dragGain = 1.5;
+let dragPower = 1;        // 11 이상 구간에서만 쓰는 조향 가속 배수
 let dragTargetX = null;   // 차가 가야 할 게임 좌표. null이면 드래그 조작 중이 아님
 let dragAnchorX = 0;      // 손가락을 처음 댄 화면 좌표
 let dragAnchorCarX = 0;   // 그때의 차 위치
 let dragScale = 1;        // 화면 CSS px → 게임 좌표 환산 (기기 해상도 차이 흡수)
 
 function applyDragSens() {
-  dragGain = 0.4 + save.dragSens * 0.16;   // 감도 1 → 0.56배, 7 → 1.52배, 10 → 2.0배
+  // 최고치 2.0배도 굼뜨다는 실기 피드백을 받아 상한을 15까지 열었다
+  dragGain = 0.4 + save.dragSens * 0.16;   // 감도 1 → 0.56배, 7 → 1.52배, 15 → 2.8배
+
+  // 배율만 키워도 한계가 있다. 차의 실제 가로 최고속도는 마찰(0.80)이 가속(0.95)을 잡아
+  // 프레임당 3.8px에서 멈추므로, 손가락이 아무리 앞서가도 차가 그 속도로만 따라온다.
+  // 11부터는 조향 가속도 같이 올려 그 천장을 밀어 올린다. 10 이하는 기존 감각 그대로 둔다.
+  dragPower = 1 + Math.max(0, save.dragSens - 10) * 0.12;   // 15 → 1.6배 (프레임당 6.1px)
 }
 
 function beginDrag(x) {
@@ -2289,8 +2296,9 @@ function update(dt = 1.0) {
   const moveSpeedModifier = dt;
   if (dragTargetX !== null) {
     // 손가락이 가리키는 자리로 끌어당긴다. 가까워질수록 힘을 빼서 목표 주변에서 떨지 않게 한다.
-    const pull = Math.max(-1, Math.min(1, (dragTargetX - car.x) / 10));
-    car.vx += accNow * pull * moveSpeedModifier;
+    // 감속 구간이 넓으면 한 차선 정도의 짧은 보정이 통째로 물러진다. 5px까지만 힘을 뺀다.
+    const pull = Math.max(-1, Math.min(1, (dragTargetX - car.x) / 5));
+    car.vx += accNow * dragPower * pull * moveSpeedModifier;
     car.angle += (pull * 0.16 - car.angle) * Math.min(1, 0.25 * moveSpeedModifier);
   } else if (keys['ArrowLeft'] || keys['a'] || keys['A'] || touchLeftPressed) {
     car.vx -= accNow * moveSpeedModifier;
