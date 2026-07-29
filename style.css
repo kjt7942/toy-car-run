@@ -705,6 +705,15 @@ html, body {
   z-index: 15;
 }
 
+/* 드래그 조작: 화면 전체를 잡을 수 있게 넓히고 좌/우 버튼 비주얼은 감춘다 */
+#touchControls.drag-mode {
+  height: 100%;
+}
+
+#touchControls.drag-mode .touch-zone {
+  display: none;
+}
+
 .touch-zone {
   flex: 1;
   height: 100%;

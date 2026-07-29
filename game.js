@@ -12,8 +12,11 @@ const bestScore = document.getElementById('bestScore');
 const heartContainer = document.getElementById('heartContainer');
 
 // 모바일 터치 엘리먼트
+const touchControls = document.getElementById('touchControls');
 const touchLeft = document.getElementById('touchLeft');
 const touchRight = document.getElementById('touchRight');
+const controlBtn = document.getElementById('controlBtn');
+const ctrlHint = document.getElementById('ctrlHint');
 
 // 콤보 및 아이템 상태 표시 엘리먼트
 const levelVal = document.getElementById('levelVal');
@@ -79,7 +82,8 @@ function defaultSave() {
     achievements: {},
     unlocked: ['classic'],
     selected: 'classic',
-    muted: false
+    muted: false,
+    control: 'buttons'   // 'buttons' | 'drag'
   };
 }
 
@@ -602,6 +606,50 @@ touchRight.addEventListener('mousedown', (e) => {
 });
 touchRight.addEventListener('mouseup', () => touchRightPressed = false);
 touchRight.addEventListener('mouseleave', () => touchRightPressed = false);
+
+// 4. 드래그 조작 (옵션)
+// 버튼을 정확히 눌러야 하는 부담 없이 화면 아무 곳이나 잡고 좌우로 밀어 조향한다.
+// 물리는 그대로 두고 기존 두 플래그만 세팅해 두 조작법이 같은 코드를 쓰게 한다.
+const DRAG_DEADZONE = 10;  // CSS px. 이보다 작은 손떨림은 무시
+const DRAG_THROW = 40;     // 기준점이 손가락에서 멀어질 수 있는 최대 거리 (가상 조이스틱 반경)
+let dragAnchorX = 0;
+
+function applyDrag(x) {
+  // 기준점을 손가락 뒤에 붙여 따라가게 해서, 방향을 되돌릴 때 화면 끝까지 되밀지 않아도 되게 한다
+  dragAnchorX = Math.min(Math.max(dragAnchorX, x - DRAG_THROW), x + DRAG_THROW);
+  const dx = x - dragAnchorX;
+  touchLeftPressed = dx < -DRAG_DEADZONE;
+  touchRightPressed = dx > DRAG_DEADZONE;
+}
+
+touchControls.addEventListener('touchstart', (e) => {
+  if (save.control !== 'drag') return;
+  e.preventDefault();
+  isTouchDevice = true;
+  dragAnchorX = e.touches[0].clientX;
+  touchLeftPressed = touchRightPressed = false;
+}, { passive: false });
+
+touchControls.addEventListener('touchmove', (e) => {
+  if (save.control !== 'drag') return;
+  e.preventDefault();
+  applyDrag(e.touches[0].clientX);
+}, { passive: false });
+
+function endDrag(e) {
+  if (save.control !== 'drag') return;
+  e.preventDefault();
+  touchLeftPressed = touchRightPressed = false;
+}
+touchControls.addEventListener('touchend', endDrag, { passive: false });
+touchControls.addEventListener('touchcancel', endDrag, { passive: false });
+
+function updateControlButton() {
+  const drag = save.control === 'drag';
+  touchControls.classList.toggle('drag-mode', drag);
+  if (controlBtn) controlBtn.textContent = drag ? '📱 조작: 드래그' : '📱 조작: 버튼';
+  if (ctrlHint) ctrlHint.textContent = drag ? '화면을 잡고 좌우로 밀기' : '하단 좌/우 영역 터치';
+}
 
 
 // --- [그리기 보조 함수군 - 벡터 그래픽 고도화] ---
@@ -2699,6 +2747,12 @@ bindTap(muteBtn, () => {
   if (!save.muted) playSound('coin'); // 음소거를 풀면 소리가 살아난 걸 바로 확인시켜 준다
 });
 
+bindTap(controlBtn, () => {
+  save.control = save.control === 'drag' ? 'buttons' : 'drag';
+  persistSave();
+  updateControlButton();
+});
+
 document.querySelectorAll('.close-screen').forEach(btn => {
   bindTap(btn, () => {
     closeScreen(statsScreen);
@@ -2732,5 +2786,6 @@ document.addEventListener('visibilitychange', () => {
 
 resizeCanvas();
 updateMuteButton();
+updateControlButton();
 window.addEventListener('resize', resizeCanvas);
 loop((window.performance && window.performance.now) ? window.performance.now() : Date.now());
