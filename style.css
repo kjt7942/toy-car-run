@@ -445,6 +445,41 @@ html, body {
   font-weight: normal;
 }
 
+/* 차량 특성 문구 */
+.car-perk {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--dark);
+  opacity: 0.75;
+  line-height: 1.25;
+  margin: 2px 0 4px;
+}
+
+/* 오늘의 도전 */
+.btn-daily {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.daily-info {
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: var(--dark);
+  opacity: 0.85;
+  margin-top: 6px;
+}
+
+/* 코인 부활 버튼 */
+.btn-revive {
+  background: #FF7675;
+  color: var(--white);
+  margin-bottom: 8px;
+}
+
+.btn-revive.hidden {
+  display: none;
+}
+
 .opt-row input[type="range"] {
   flex: 1;
   accent-color: var(--primary-color);

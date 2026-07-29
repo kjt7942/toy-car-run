@@ -54,6 +54,10 @@ const runCoinsVal = document.getElementById('runCoinsVal');
 const runComboVal = document.getElementById('runComboVal');
 const runDistVal = document.getElementById('runDistVal');
 const newAchievements = document.getElementById('newAchievements');
+const dailyBtn = document.getElementById('dailyBtn');
+const dailyInfo = document.getElementById('dailyInfo');
+const dailyStat = document.getElementById('dailyStat');
+const reviveBtn = document.getElementById('reviveBtn');
 
 const magnetBar = badgeMagnet.querySelector('.badge-bar > i');
 const boosterBar = badgeBooster.querySelector('.badge-bar > i');
@@ -88,7 +92,8 @@ function defaultSave() {
     selected: 'classic',
     muted: false,
     control: 'buttons',  // 'buttons' | 'drag'
-    dragSens: 7          // 1(느긋) ~ 15(예민)
+    dragSens: 7,         // 1(느긋) ~ 15(예민)
+    daily: { date: '', best: 0 }   // 오늘의 도전 기록 (날짜가 바뀌면 초기화)
   };
 }
 
@@ -104,6 +109,7 @@ function loadSave() {
       if (!merged.achievements || typeof merged.achievements !== 'object') merged.achievements = {};
       // 감도가 깨져 있으면 조향이 아예 먹통이 되므로 범위를 강제한다
       if (!(merged.dragSens >= 1 && merged.dragSens <= 15)) merged.dragSens = 7;
+      if (!merged.daily || typeof merged.daily !== 'object') merged.daily = { date: '', best: 0 };
       return merged;
     }
   } catch (e) {
@@ -163,15 +169,52 @@ const COMBO_STEP = 3;       // 3회마다 배수 1단계 상승
 const MAX_COMBO_MULT = 8;
 
 // --- [해금 차량 스킨] ---
-// 모은 코인으로 살 수 있는 외형. 성능은 모두 동일하고 보이는 것만 달라진다.
+// 색만 다르면 차고를 두 번 갈 이유가 없다. 차마다 특성을 하나씩 붙여
+// "더 센 차"가 아니라 "다르게 노는 차"가 되게 한다. 강화 폭은 서로 비슷하게 맞췄다.
 const CARS = [
-  { id: 'classic', name: '클래식',   cost: 0,     body: '#FFDE59', stripe: '#FF5757', spoiler: '#2F3640' },
-  { id: 'ruby',    name: '루비',     cost: 600,   body: '#FF5757', stripe: '#FFFFFF', spoiler: '#2F3640' },
-  { id: 'mint',    name: '민트',     cost: 1500,  body: '#00CEC9', stripe: '#FFFFFF', spoiler: '#2F3640' },
-  { id: 'shadow',  name: '섀도',     cost: 3000,  body: '#3D4454', stripe: '#FFDE59', spoiler: '#FFDE59' },
-  { id: 'gold',    name: '골드',     cost: 5000,  body: '#FFD700', stripe: '#B8860B', spoiler: '#B8860B' },
-  { id: 'rainbow', name: '레인보우', cost: 9000,  body: null,      stripe: '#FFFFFF', spoiler: '#2F3640' }
+  { id: 'classic', name: '클래식',   cost: 0,     body: '#FFDE59', stripe: '#FF5757', spoiler: '#2F3640',
+    perk: '무난한 기본기' },
+  { id: 'ruby',    name: '루비',     cost: 600,   body: '#FF5757', stripe: '#FFFFFF', spoiler: '#2F3640',
+    perk: '시작할 때 보호막 1개', startShield: true },
+  { id: 'mint',    name: '민트',     cost: 1500,  body: '#00CEC9', stripe: '#FFFFFF', spoiler: '#2F3640',
+    perk: '콤보 지속 +50%', comboBonus: 1.5 },
+  { id: 'shadow',  name: '섀도',     cost: 3000,  body: '#3D4454', stripe: '#FFDE59', spoiler: '#FFDE59',
+    perk: '조향 반응 +25%', handling: 1.25 },
+  { id: 'gold',    name: '골드',     cost: 5000,  body: '#FFD700', stripe: '#B8860B', spoiler: '#B8860B',
+    perk: '코인 점수 +30%', coinBonus: 1.3 },
+  { id: 'rainbow', name: '레인보우', cost: 9000,  body: null,      stripe: '#FFFFFF', spoiler: '#2F3640',
+    perk: '아이템 지속 +40%', itemBonus: 1.4 }
 ];
+
+// 매 프레임 CARS를 뒤지지 않도록 판 시작 때 한 번만 집어 둔다
+let carPerk = CARS[0];
+
+// --- [오늘의 도전] ---
+// 매일 규칙이 하나씩 바뀐다. 혼자 해도 "오늘 몫의 한 판"이 생기고,
+// 규칙이 강제되니 늘 쓰던 안전한 플레이가 통하지 않는다.
+const DAILY_MODS = [
+  { id: 'oneLife',  name: '한 번의 기회', desc: '하트 1개로 시작 · 점수 2배',    lives: 1, scoreMul: 2 },
+  { id: 'sprint',   name: '전력 질주',   desc: '처음부터 고속 주행 · 점수 1.5배', speed: 8.6, scoreMul: 1.5 },
+  { id: 'coinRush', name: '코인 러시',   desc: '코인 점수 2배 · 하트 미등장',    coinMul: 2, noHeart: true, scoreMul: 1 },
+  { id: 'bare',     name: '맨몸 주행',   desc: '파워업 미등장 · 점수 1.8배',     noPowerup: true, scoreMul: 1.8 }
+];
+
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// 날짜 문자열을 해시로 돌려 규칙을 고른다. 같은 날이면 몇 번을 눌러도 같은 규칙이 나온다.
+function todayMod() {
+  const key = todayKey();
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0;
+  return DAILY_MODS[Math.abs(h) % DAILY_MODS.length];
+}
+
+let dailyRun = false;
+let activeMod = null;
+let scoreMul = 1;
 
 // 테스트 이벤트: 모든 차량을 기본 차량과 같은 값으로 할인한다.
 // 끄면 원래 가격표로 돌아간다.
@@ -254,6 +297,16 @@ let slipperyTime = 0;
 const SLIPPERY_DURATION = 150; // 2.5초
 const SLIPPERY_FRICTION = 0.93; // 잘 안 멈춤 = 미끄러짐
 const SLIPPERY_ACC = 0.5;       // 접지력을 잃어 가속도 저하
+
+// 코인 2배 보너스 게이트를 통과했을 때의 잔여 시간
+let bonusTime = 0;
+const BONUS_DURATION = 480; // 8초
+
+// 마지막 하트가 깎인 직후의 슬로우모션. 죽기 직전이 가장 짜릿한 순간이 되도록
+// 시간을 늘려 한 번 더 피할 기회를 주고, 위기라는 걸 몸으로 알게 한다.
+let lastStandTime = 0;
+const LAST_STAND_DURATION = 55;
+const LAST_STAND_FACTOR = 0.4;
 
 // 화면 방해 오일 효과 리스트
 let screenOils = [];
@@ -557,7 +610,7 @@ window.addEventListener('keydown', (e) => {
       closeScreen(garageScreen);
       return;
     }
-    startGame();
+    startGame(dailyRun);
   }
 });
 window.addEventListener('keyup', (e) => {
@@ -1459,6 +1512,46 @@ function drawSlowItem(ctx, x, y, size) {
 }
 
 
+// 선택 게이트: 어느 문으로 들어갈지 스스로 고르게 만드는 표지판.
+// 황금 문은 코인 2배지만 바로 뒤가 장애물 밭이라 대가를 치러야 한다.
+function drawGate(ctx, x, y, w, h, bonus) {
+  ctx.save();
+  ctx.translate(x, y);
+
+  const half = w / 2;
+  ctx.strokeStyle = '#2F3640';
+  ctx.lineWidth = 3;
+
+  // 양쪽 기둥
+  ctx.fillStyle = bonus ? '#B8860B' : '#4A934A';
+  ctx.beginPath();
+  ctx.roundRect(-half, -h / 2, 9, h, 3);
+  ctx.roundRect(half - 9, -h / 2, 9, h, 3);
+  ctx.fill();
+  ctx.stroke();
+
+  // 현수막
+  ctx.fillStyle = bonus ? '#FFD700' : '#7ED957';
+  if (bonus) {
+    ctx.shadowColor = '#FFD700';
+    ctx.shadowBlur = 12;
+  }
+  ctx.beginPath();
+  ctx.roundRect(-half + 6, -h / 2, w - 12, h * 0.62, 5);
+  ctx.fill();
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  ctx.fillStyle = '#2F3640';
+  ctx.font = '900 15px "Jua", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(bonus ? '🪙 x2 위험' : '✅ 안전', 0, -h / 2 + h * 0.31);
+
+  ctx.restore();
+}
+
+
 // --- [게임 시스템 및 라이프사이클 관리] ---
 
 // 하트 UI 실시간 갱신
@@ -1481,7 +1574,7 @@ function getComboMult() {
 function addCombo() {
   const prevMult = getComboMult();
   combo++;
-  comboTimer = COMBO_DURATION;
+  comboTimer = COMBO_DURATION * (carPerk.comboBonus || 1);
 
   const newMult = getComboMult();
   if (newMult > runStats.maxMult) runStats.maxMult = newMult;
@@ -1505,7 +1598,7 @@ function resetCombo() {
 
 // 점수 획득 통합 처리 (콤보 배수 자동 적용)
 function gainScore(baseValue) {
-  const gain = Math.round(baseValue * getComboMult());
+  const gain = Math.round(baseValue * getComboMult() * scoreMul);
   score += gain;
   return gain;
 }
@@ -1553,6 +1646,8 @@ function renderStats() {
     });
   }
 
+  updateDailyInfo();
+
   // 도전과제
   const done = ACHIEVEMENTS.filter(a => save.achievements[a.id]).length;
   achProgress.textContent = `${done} / ${ACHIEVEMENTS.length}`;
@@ -1594,7 +1689,8 @@ function renderGarage() {
 
     card.innerHTML =
       `<div class="car-swatch" style="background:${swatchColor}; --stripe:${skin.stripe}"></div>` +
-      `<span class="car-name">${escapeHtml(skin.name)}</span>` + status;
+      `<span class="car-name">${escapeHtml(skin.name)}</span>` +
+      `<span class="car-perk">${escapeHtml(skin.perk)}</span>` + status;
 
     card.addEventListener('click', () => selectOrBuyCar(skin));
     carList.appendChild(card);
@@ -1632,6 +1728,16 @@ function closeScreen(screen) {
 
 function updateMuteButton() {
   muteBtn.textContent = save.muted ? '🔇' : '🔊';
+}
+
+// 오늘의 규칙과 오늘 기록을 시작 화면과 기록 화면에 함께 보여준다
+function updateDailyInfo() {
+  const mod = todayMod();
+  const todayBest = save.daily.date === todayKey() ? save.daily.best : 0;
+  const text = `<b>${escapeHtml(mod.name)}</b> · ${escapeHtml(mod.desc)}` +
+    `<br>오늘 최고 ${todayBest.toLocaleString()}점`;
+  if (dailyInfo) dailyInfo.innerHTML = text;
+  if (dailyStat) dailyStat.innerHTML = text;
 }
 
 // --- [콤보/아이템 상태 HUD 갱신] ---
@@ -1704,20 +1810,31 @@ function updateStatusUI() {
 }
 
 // 게임 시작 초기화
-function startGame() {
+function startGame(daily = false) {
   initAudio();
   startBgm(); // 레트로 배경음 실행
   playSound('item'); // 게임 시작 뾰로롱
   gameState = 'PLAYING';
+
+  // 판마다 선택된 차와 오늘의 규칙을 한 번만 확정한다
+  carPerk = getSelectedCar();
+  dailyRun = !!daily;
+  activeMod = dailyRun ? todayMod() : null;
+  scoreMul = (activeMod && activeMod.scoreMul) || 1;
+
   score = 0;
-  lives = MAX_LIVES;
-  gameSpeed = BASE_SPEED;
+  lives = (activeMod && activeMod.lives) || MAX_LIVES;
+  gameSpeed = (activeMod && activeMod.speed) || BASE_SPEED;
   invincibleTime = 0;
-  activeShield = false;
+  activeShield = !!carPerk.startShield;
   boosterTime = 0;
   magnetTime = 0;
   slowTime = 0;
   slipperyTime = 0;
+  bonusTime = 0;
+  lastStandTime = 0;
+  revivedThisRun = false;
+  preGameOverSave = null;
 
   // 이전 판에서 손가락을 뗀 위치가 남아 있으면 새 판 시작하자마자 차가 그리로 튄다
   dragTargetX = null;
@@ -1765,9 +1882,49 @@ function startGame() {
   startScreen.classList.remove('active');
   gameOverScreen.classList.remove('active');
 
+  // 오늘 어떤 규칙으로 달리는지 판 시작에 한 번 알려 준다
+  if (activeMod) {
+    addFloatingText(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 60, `🗓️ ${activeMod.name}`, '#FFDE59');
+    addFloatingText(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 20, activeMod.desc, '#FFFFFF');
+  }
+
   // 버튼에 포커스가 남아 있으면 Space/Enter 재시작이 버튼 클릭과 중복 발동한다
   startBtn.blur();
   restartBtn.blur();
+}
+
+// --- [코인 부활] ---
+// 잘 달리던 판이 한 번의 실수로 끝나는 게 가장 아깝다. 모아 둔 코인으로 딱 한 번 되산다.
+const REVIVE_COST = 300;
+let revivedThisRun = false;
+let preGameOverSave = null;   // 게임오버가 기록에 반영한 내용을 되돌리기 위한 직전 상태
+
+function doRevive() {
+  if (revivedThisRun || !preGameOverSave || preGameOverSave.coins < REVIVE_COST) return;
+
+  // 게임오버가 이미 누적 기록에 반영해 버렸으므로 통째로 되돌린 뒤 값만 치른다.
+  // 판이 끝날 때 다시 정상적으로 반영된다.
+  Object.assign(save, preGameOverSave);
+  save.coins -= REVIVE_COST;
+  persistSave();
+  revivedThisRun = true;
+
+  gameOverScreen.classList.remove('active');
+  gameState = 'PLAYING';
+  lives = 1;
+  invincibleTime = 150;
+  lastStandTime = 0;
+  combo = 0;
+  comboTimer = 0;
+
+  // 부활하자마자 눈앞의 장애물에 그대로 다시 박으면 코인만 날린 셈이 된다
+  obstacles = obstacles.filter(o => o.y < car.y - 220);
+
+  startBgm();
+  playSound('heal');
+  updateHeartsUI();
+  updateStatusUI();
+  addFloatingText(car.x, car.y - 60, '부활! 💖', '#FF5757');
 }
 
 // 게임 오버
@@ -1784,34 +1941,56 @@ function triggerGameOver() {
   magnetTime = 0;
   slowTime = 0;
   slipperyTime = 0;
+  bonusTime = 0;
+  lastStandTime = 0;
   updateStatusUI();
+
+  // 부활을 고르면 여기서 반영한 기록을 통째로 되돌려야 하므로 직전 상태를 남겨 둔다
+  preGameOverSave = JSON.parse(JSON.stringify(save));
 
   // 실시간 획득 점수가 소수점을 가지므로 정수형으로 소수점 절사 보정
   const roundedScore = Math.floor(score);
-  const isNewRecord = roundedScore > save.best;
+
+  // 오늘의 도전은 규칙이 점수를 부풀리므로 평상시 순위표와 섞지 않는다
+  if (save.daily.date !== todayKey()) save.daily = { date: todayKey(), best: 0 };
+  const isNewRecord = dailyRun
+    ? roundedScore > save.daily.best
+    : roundedScore > save.best;
 
   // 누적 기록 갱신
   save.runs++;
   save.coins += runStats.coins;
   save.totalDistance += distance;
   if (runStats.maxMult > save.bestCombo) save.bestCombo = runStats.maxMult;
-  if (isNewRecord) save.best = roundedScore;
 
-  // TOP 5 순위표 갱신
-  save.scores.push(roundedScore);
-  save.scores.sort((a, b) => b - a);
-  save.scores = save.scores.slice(0, MAX_RANKS);
+  if (dailyRun) {
+    if (isNewRecord) save.daily.best = roundedScore;
+  } else {
+    if (isNewRecord) save.best = roundedScore;
+
+    // TOP 5 순위표 갱신
+    save.scores.push(roundedScore);
+    save.scores.sort((a, b) => b - a);
+    save.scores = save.scores.slice(0, MAX_RANKS);
+  }
 
   const newlyUnlocked = evaluateAchievements(roundedScore);
   persistSave();
 
   finalScore.textContent = roundedScore;
-  bestScore.textContent = save.best;
+  bestScore.textContent = dailyRun ? save.daily.best : save.best;
   runCoinsVal.textContent = runStats.coins;
   runComboVal.textContent = 'x' + runStats.maxMult;
   runDistVal.textContent = toMeters(distance) + 'm';
 
   recordBanner.classList.toggle('visible', isNewRecord);
+
+  // 부활은 판당 한 번, 그리고 판 시작 전에 이미 모아 둔 코인으로만 살 수 있다
+  if (reviveBtn) {
+    const canRevive = !revivedThisRun && preGameOverSave.coins >= REVIVE_COST;
+    reviveBtn.classList.toggle('hidden', !canRevive);
+    reviveBtn.textContent = `💖 부활하기 (🪙 ${REVIVE_COST})`;
+  }
 
   // 이번 판에 새로 딴 도전과제를 결과 화면에 모아 보여준다
   if (newlyUnlocked.length > 0) {
@@ -1929,6 +2108,12 @@ function handleCollision(obsIndex) {
     triggerGameOver();
   } else {
     invincibleTime = INVINCIBLE_DURATION;
+    // 하트 하나만 남은 순간, 시간을 늘려 위기라는 걸 몸으로 알린다
+    if (lives === 1) {
+      lastStandTime = LAST_STAND_DURATION;
+      playSound('slow');
+      addFloatingText(car.x, car.y - 70, '마지막 하트!', '#FF5757');
+    }
   }
 }
 
@@ -2035,13 +2220,19 @@ function pushObs(type, t, dy = 0, opts = {}) {
   if (dy > patternDepth) patternDepth = dy;
 }
 
+// 게이트는 도로 절반을 가로막는 넓적한 문이라 다른 아이템과 크기가 다르다
+const GATE_W = 112;
+const GATE_H = 30;
+
 function pushItem(type, t, dy = 0, risky = false) {
-  const size = type === 'coin' ? 20 : 25;
+  const isGate = type === 'gateBonus' || type === 'gateSafe';
+  const w = isGate ? GATE_W : (type === 'coin' ? 20 : 25);
+  const h = isGate ? GATE_H : w;
   gameItems.push({
-    x: roadPos(t, size),
+    x: roadPos(t, w),
     y: SPAWN_TOP - dy,
-    width: size,
-    height: size,
+    width: w,
+    height: h,
     type: type,
     risky: risky
   });
@@ -2057,12 +2248,14 @@ function randomObstacleType() {
 }
 
 function randomPowerupType() {
+  // 오늘의 도전 규칙에 따라 파워업 자체가 막히거나 하트만 빠진다
+  if (activeMod && activeMod.noPowerup) return 'coin';
   const roll = Math.random();
   if (roll < 0.30) return 'shield';
   if (roll < 0.54) return 'magnet';
   if (roll < 0.74) return 'booster';
   if (roll < 0.88) return 'slow';
-  return 'heart';
+  return (activeMod && activeMod.noHeart) ? 'shield' : 'heart';
 }
 
 // 각 패턴은 minLevel(등장 시작 레벨)과 weight(등장 빈도)를 가진다.
@@ -2171,6 +2364,28 @@ const PATTERNS = [
     }
   },
   {
+    // 선택 게이트: 길이 두 갈래로 갈린다. 황금 문은 코인 2배지만 바로 뒤가 장애물 밭.
+    // 죽어도 "운이 나빴다"가 아니라 "내가 욕심냈다"가 되게 하는 장치.
+    name: 'gate', minLevel: 2, weight: 13, growth: 0.04,
+    build() {
+      const bonusLeft = Math.random() < 0.5;
+      pushItem(bonusLeft ? 'gateBonus' : 'gateSafe', 0);
+      pushItem(bonusLeft ? 'gateSafe' : 'gateBonus', 1);
+
+      // 욕심낸 쪽에는 대가가 따른다
+      const risk = bonusLeft ? 0.08 : 0.92;
+      const inward = bonusLeft ? 0.22 : 0.78;
+      pushObs('cone', risk, 105);
+      pushObs('rock', inward, 175);
+      pushObs('cone', risk, 245);
+      pushItem('coin', risk, 140, true);
+      pushItem('coin', inward, 210, true);
+
+      // 안전한 쪽은 정말 비어 있어야 선택에 의미가 생긴다
+      pushItem('coin', bonusLeft ? 0.92 : 0.08, 175);
+    }
+  },
+  {
     // 보급: 파워업 하나와 코인 몇 개
     name: 'powerup', minLevel: 1, weight: 15, growth: -0.02,
     build() {
@@ -2250,10 +2465,16 @@ function update(dt = 1.0) {
     targetSpeed *= SLOW_FACTOR;
   }
 
+  // 마지막 하트만 남은 직후에는 시간이 늘어진다
+  if (lastStandTime > 0) {
+    lastStandTime -= dt;
+    targetSpeed *= LAST_STAND_FACTOR;
+  }
+
   // 2. 스크롤 누적 점수 및 주행 거리 증가 (부스터 중일 땐 점수 누적 대폭 증가)
   // 콤보 배수를 주행 점수에도 적용한다. 그래야 콤보가 "먹는 순간의 보너스"에 그치지 않고
   // 유지하는 내내 초당 수입이 불어나는 자원이 되어, 끊기는 순간의 손실이 계속 아프다.
-  const distanceRate = DISTANCE_SCORE * (1 + (level - 1) * LEVEL_SCORE_BONUS) * getComboMult();
+  const distanceRate = DISTANCE_SCORE * (1 + (level - 1) * LEVEL_SCORE_BONUS) * getComboMult() * scoreMul;
   score += distanceRate * (boosterTime > 0 ? 3 : 1) * dt;
   distance += targetSpeed * dt;
   scoreVal.textContent = Math.floor(score);
@@ -2271,6 +2492,7 @@ function update(dt = 1.0) {
   // 3. 타이머 제어
   if (invincibleTime > 0) invincibleTime -= dt;
   if (magnetTime > 0) magnetTime -= dt;
+  if (bonusTime > 0) bonusTime -= dt;
 
   // 콤보 지속시간 감소 (제한 시간 안에 다음 획득이 없으면 소멸)
   if (comboTimer > 0) {
@@ -2290,7 +2512,7 @@ function update(dt = 1.0) {
   // 웅덩이를 밟으면 접지력을 잃어 가속은 둔해지고 관성은 오래 남는다.
   if (slipperyTime > 0) slipperyTime -= dt;
   const isSlippery = slipperyTime > 0;
-  const accNow = isSlippery ? SLIPPERY_ACC : car.acc;
+  const accNow = (isSlippery ? SLIPPERY_ACC : car.acc) * (carPerk.handling || 1);
   const frictionNow = isSlippery ? SLIPPERY_FRICTION : car.friction;
 
   const moveSpeedModifier = dt;
@@ -2423,10 +2645,34 @@ function update(dt = 1.0) {
       if (it.type === 'coin') {
         addCombo();
         runStats.coins++;
-        const gain = gainScore(it.risky ? RISKY_COIN_SCORE : COIN_SCORE);
+        const base = (it.risky ? RISKY_COIN_SCORE : COIN_SCORE)
+          * (carPerk.coinBonus || 1)
+          * (bonusTime > 0 ? 2 : 1)
+          * ((activeMod && activeMod.coinMul) || 1);
+        const gain = gainScore(base);
         playSound('coin');
         addFloatingText(it.x, it.y, `+${gain}`, it.risky ? "#FF5757" : "#FED330");
         createCrashParticles(it.x, it.y, it.risky ? '#FF7675' : '#FFD700');
+      } else if (it.type === 'gateBonus' || it.type === 'gateSafe') {
+        // 게이트는 지나가는 것 자체가 선택이다. 판정만 하고 차에 붙지 않는다.
+        if (it.type === 'gateBonus') {
+          bonusTime = BONUS_DURATION * (carPerk.itemBonus || 1);
+          playSound('levelup');
+          addFloatingText(car.x, car.y - 45, "코인 2배!! 🪙", "#FFD700");
+          shakeTime = 10;
+          shakeAmount = 4;
+        } else {
+          playSound('item');
+          addFloatingText(car.x, car.y - 45, "안전 통과 ✅", "#7ED957");
+        }
+        createCrashParticles(it.x, car.y - 20, it.type === 'gateBonus' ? '#FFD700' : '#7ED957');
+        // 같은 패턴의 반대편 게이트는 지워서 둘 다 먹는 일이 없게 한다
+        for (let j = gameItems.length - 1; j >= 0; j--) {
+          if (j !== i && (gameItems[j].type === 'gateBonus' || gameItems[j].type === 'gateSafe')) {
+            gameItems.splice(j, 1);
+            if (j < i) i--;
+          }
+        }
       } else if (it.type === 'heart') {
         // 라이프가 가득 찼다면 회복 대신 점수로 환산해 준다
         if (lives < MAX_LIVES) {
@@ -2441,7 +2687,7 @@ function update(dt = 1.0) {
         }
         createCrashParticles(it.x, it.y, '#FF7675');
       } else if (it.type === 'slow') {
-        slowTime = SLOW_DURATION;
+        slowTime = SLOW_DURATION * (carPerk.itemBonus || 1);
         playSound('slow');
         addFloatingText(car.x, car.y - 45, "슬로우모션 ⏳", "#A29BFE");
         createCrashParticles(it.x, it.y, '#A29BFE');
@@ -2451,13 +2697,13 @@ function update(dt = 1.0) {
         addFloatingText(car.x, car.y - 45, "보호막 장착 🛡️", "#00CEC9");
         createCrashParticles(it.x, it.y, '#81ECEC');
       } else if (it.type === 'magnet') {
-        magnetTime = MAGNET_DURATION;
+        magnetTime = MAGNET_DURATION * (carPerk.itemBonus || 1);
         playSound('item');
         addFloatingText(car.x, car.y - 45, "코인 자석 활성 🧲", "#FF7675");
         createCrashParticles(it.x, it.y, '#FF7675');
       } else if (it.type === 'booster') {
-        boosterTime = BOOSTER_DURATION;
-        invincibleTime = BOOSTER_DURATION + 30; // 부스터 중에는 완벽 무적 제공!
+        boosterTime = BOOSTER_DURATION * (carPerk.itemBonus || 1);
+        invincibleTime = boosterTime + 30; // 부스터 중에는 완벽 무적 제공!
         playSound('booster');
         addFloatingText(car.x, car.y - 45, "슈퍼 피버 부스터!! ⚡", "#00DEC9");
         createCrashParticles(it.x, it.y, '#FFD700');
@@ -2647,6 +2893,8 @@ function draw() {
       drawHeartItem(ctx, it.x, it.y, it.width);
     } else if (it.type === 'slow') {
       drawSlowItem(ctx, it.x, it.y, it.width);
+    } else if (it.type === 'gateBonus' || it.type === 'gateSafe') {
+      drawGate(ctx, it.x, it.y, it.width, it.height, it.type === 'gateBonus');
     }
   });
 
@@ -2739,6 +2987,32 @@ function draw() {
     ctx.restore();
   }
 
+  // 15-b. 코인 2배 보너스는 황금 테두리로 남은 시간을 알린다
+  if (bonusTime > 0) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255, 215, 0, 0.55)';
+    ctx.lineWidth = 10;
+    ctx.strokeRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    ctx.restore();
+  }
+
+  // 15-c. 하트가 하나뿐이면 화면 가장자리가 붉게 맥동한다.
+  // 피격 직후의 슬로우모션 동안에는 훨씬 짙게 깔아 "죽기 직전"을 각인시킨다.
+  if (gameState === 'PLAYING' && lives === 1) {
+    const pulse = 0.16 + Math.sin(Date.now() / 260) * 0.06;
+    const intensity = lastStandTime > 0 ? 0.55 : pulse;
+    const grad = ctx.createRadialGradient(
+      GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_HEIGHT * 0.28,
+      GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_HEIGHT * 0.62
+    );
+    grad.addColorStop(0, 'rgba(255, 87, 87, 0)');
+    grad.addColorStop(1, `rgba(214, 48, 49, ${intensity})`);
+    ctx.save();
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    ctx.restore();
+  }
+
   // 16. 오일 스크린 번짐 연출 그리기 (가장 위에 덧칠)
   screenOils.forEach(oil => {
     ctx.save();
@@ -2778,21 +3052,23 @@ function loop(timestamp) {
 
 // --- [버튼 이벤트 및 리스너 등록] ---
 // PC 클릭 연동
-startBtn.addEventListener('click', startGame);
-restartBtn.addEventListener('click', startGame);
+// startGame(daily)에 이벤트 객체가 그대로 넘어가면 truthy라 평상시 판이 도전 모드로 시작된다.
+// 다시 달리기는 방금 하던 모드를 그대로 이어 준다.
+startBtn.addEventListener('click', () => startGame(false));
+restartBtn.addEventListener('click', () => startGame(dailyRun));
 
 // 스마트폰 모바일 터치 대응 (click 이벤트가 간헐적으로 안 받는 브라우저 완벽 보호)
 // touchstart 대신 touchend를 사용하여 확실한 사용자 제스처 이벤트로 브라우저 사운드 및 상태 변화 락 해제
 startBtn.addEventListener('touchend', (e) => {
   e.preventDefault();
   e.stopPropagation();
-  startGame();
+  startGame(false);
 }, { passive: false });
 
 restartBtn.addEventListener('touchend', (e) => {
   e.preventDefault();
   e.stopPropagation();
-  startGame();
+  startGame(dailyRun);
 }, { passive: false });
 
 // 기록 / 차고 / 음소거 버튼 연결 (터치 기기에서도 확실히 반응하도록 두 이벤트 모두 등록)
@@ -2817,6 +3093,9 @@ bindTap(muteBtn, () => {
   updateMuteButton();
   if (!save.muted) playSound('coin'); // 음소거를 풀면 소리가 살아난 걸 바로 확인시켜 준다
 });
+
+bindTap(dailyBtn, () => startGame(true));
+bindTap(reviveBtn, doRevive);
 
 bindTap(controlBtn, () => {
   save.control = save.control === 'drag' ? 'buttons' : 'drag';
@@ -2862,5 +3141,6 @@ document.addEventListener('visibilitychange', () => {
 resizeCanvas();
 updateMuteButton();
 updateControlButton();
+updateDailyInfo();
 window.addEventListener('resize', resizeCanvas);
 loop((window.performance && window.performance.now) ? window.performance.now() : Date.now());

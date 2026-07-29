@@ -77,10 +77,13 @@
           <p>⌨️ <strong>PC 조작:</strong> 방향키 ◀ ▶ 또는 A / D</p>
           <p>📱 <strong>모바일:</strong> <span id="ctrlHint">하단 좌/우 영역 터치</span></p>
           <p>🔥 <strong>콤보:</strong> 코인 획득과 아슬아슬 회피로 배수 UP!</p>
+          <p>🚪 <strong>게이트:</strong> 황금 문은 코인 2배, 대신 그 뒤가 험난!</p>
           <p>🔄 <strong>바로 재시작:</strong> Space 또는 Enter</p>
         </div>
 
         <button id="startBtn" class="btn-primary">게임 시작하기!</button>
+        <button id="dailyBtn" class="btn-secondary btn-daily">🗓️ 오늘의 도전</button>
+        <p id="dailyInfo" class="daily-info"></p>
         <div class="btn-row">
           <button id="controlBtn" class="btn-secondary">📱 조작: 버튼</button>
         </div>
@@ -124,6 +127,7 @@
 
         <div id="newAchievements" class="new-ach"></div>
 
+        <button id="reviveBtn" class="btn-primary btn-revive hidden">💖 부활하기</button>
         <button id="restartBtn" class="btn-primary btn-bounce">다시 달리기 🔄</button>
         <div class="btn-row">
           <button id="statsBtn2" class="btn-secondary">🏆 기록</button>
@@ -143,6 +147,9 @@
           <div class="stat-cell"><span>모은 코인</span><b id="statCoins">0</b></div>
           <div class="stat-cell"><span>최고 콤보</span><b id="statCombo">x1</b></div>
         </div>
+
+        <h2 class="section-title">🗓️ 오늘의 도전</h2>
+        <p id="dailyStat" class="daily-info"></p>
 
         <h2 class="section-title">TOP 5</h2>
         <ol id="rankList" class="rank-list"></ol>
