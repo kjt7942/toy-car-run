@@ -23,8 +23,12 @@ const comboGauge = document.getElementById('comboGauge');
 const badgeShield = document.getElementById('badgeShield');
 const badgeMagnet = document.getElementById('badgeMagnet');
 const badgeBooster = document.getElementById('badgeBooster');
+const badgeSlow = document.getElementById('badgeSlow');
+const badgeSlip = document.getElementById('badgeSlip');
 const magnetBar = badgeMagnet.querySelector('.badge-bar > i');
 const boosterBar = badgeBooster.querySelector('.badge-bar > i');
+const slowBar = badgeSlow.querySelector('.badge-bar > i');
+const slipBar = badgeSlip.querySelector('.badge-bar > i');
 
 // 가상 해상도 설정 (Canvas 내부 조율용 고정 비율)
 const GAME_WIDTH = 360;
@@ -52,8 +56,10 @@ const SPEED_INC = 0.0015;
 // 그 탓에 전체 점수의 90% 이상이 코인에서 나와 "멀리 달리는" 재미가 죽어 있었다.
 const DISTANCE_SCORE = 1;   // 프레임당 1점 = 초당 60점
 const COIN_SCORE = 100;
+const RISKY_COIN_SCORE = 220; // 장애물 틈에 박아 둔 코인은 위험한 만큼 더 준다
 const NEARMISS_SCORE = 60;
 const DESTROY_SCORE = 120;
+const HEART_FULL_SCORE = 400; // 라이프가 가득 찼을 때 하트를 먹으면 점수로 환산
 
 // 콤보: 코인 획득과 아슬아슬 회피로 쌓이고, 피격하거나 일정 시간 놀면 사라진다.
 let combo = 0;
@@ -62,10 +68,14 @@ const COMBO_DURATION = 240; // 4초 안에 다음 획득이 없으면 콤보 소
 const COMBO_STEP = 3;       // 3회마다 배수 1단계 상승
 const MAX_COMBO_MULT = 8;
 
-// 레벨 마일스톤 (일정 점수마다 속도/밀도 상승 연출)
-const LEVEL_STEP = 1500;
+// 레벨 마일스톤.
+// 점수에 연동하면 콤보가 잘 터진 판만 난이도가 폭주해 실력이 아닌 운이 난이도를 정해 버린다.
+// 그래서 실제로 달린 거리를 기준으로 삼아 누구에게나 같은 속도로 압박이 올라오게 했다.
+const LEVEL_DISTANCE = 6500; // 레벨 1 통과에 필요한 주행 거리(px)
+const LEVEL_GROWTH = 1.12;   // 레벨이 오를수록 다음 구간이 조금씩 길어진다
 let level = 1;
-let nextLevelScore = LEVEL_STEP;
+let distance = 0;
+let nextLevelDistance = LEVEL_DISTANCE;
 
 // 화면 흔들림(Screen Shake)
 let shakeTime = 0;
@@ -85,6 +95,17 @@ let boosterTime = 0;      // 부스터 피버 잔여 시간 (프레임)
 let magnetTime = 0;       // 자석 활성화 잔여 시간 (프레임)
 const BOOSTER_DURATION = 240; // 4초
 const MAGNET_DURATION = 360;  // 6초
+
+// 슬로우모션: 난장판 구간을 뚫고 나갈 여지를 주는 구제 아이템
+let slowTime = 0;
+const SLOW_DURATION = 300;  // 5초
+const SLOW_FACTOR = 0.55;
+
+// 웅덩이를 밟으면 잠시 접지력을 잃는다 (라이프는 안 깎이는 조작 방해형 함정)
+let slipperyTime = 0;
+const SLIPPERY_DURATION = 150; // 2.5초
+const SLIPPERY_FRICTION = 0.93; // 잘 안 멈춤 = 미끄러짐
+const SLIPPERY_ACC = 0.5;       // 접지력을 잃어 가속도 저하
 
 // 화면 방해 오일 효과 리스트
 let screenOils = [];
@@ -284,6 +305,37 @@ function playSound(type) {
       osc.start(now);
       osc.stop(now + 0.9);
     } 
+    else if (type === 'splash') {
+      // 웅덩이를 밟았을 때의 첨벙 소리
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(620, now);
+      osc.frequency.exponentialRampToValueAtTime(180, now + 0.22);
+      gainNode.gain.setValueAtTime(0.12, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+      osc.start(now);
+      osc.stop(now + 0.28);
+    }
+    else if (type === 'heal') {
+      // 하트 회복 시의 따뜻한 상승음
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(523.25, now);
+      osc.frequency.setValueAtTime(659.25, now + 0.12);
+      osc.frequency.setValueAtTime(783.99, now + 0.24);
+      gainNode.gain.setValueAtTime(0.14, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+      osc.start(now);
+      osc.stop(now + 0.4);
+    }
+    else if (type === 'slow') {
+      // 시간이 늘어지는 듯한 하강음
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.exponentialRampToValueAtTime(220, now + 0.55);
+      gainNode.gain.setValueAtTime(0.13, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+      osc.start(now);
+      osc.stop(now + 0.6);
+    }
     else if (type === 'nearmiss') {
       // 스쳐 지나갈 때의 짧고 산뜻한 "핑!" 신호음
       osc.type = 'square';
@@ -851,16 +903,108 @@ function drawOilDrum(ctx, x, y, w, h) {
   ctx.restore();
 }
 
+// 9) 물웅덩이 그리기 (밟으면 미끄러지는 조작 방해형 함정)
+function drawPuddle(ctx, x, y, w, h) {
+  ctx.save();
+  ctx.translate(x, y);
+
+  ctx.fillStyle = 'rgba(52, 73, 94, 0.55)';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, w / 2, h / 2, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = '#74B9FF';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  // 찰랑이는 물결 하이라이트
+  ctx.strokeStyle = 'rgba(223, 249, 251, 0.85)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.ellipse(-w * 0.12, -h * 0.12, w * 0.22, h * 0.18, 0, Math.PI * 0.9, Math.PI * 1.95);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.ellipse(w * 0.18, h * 0.1, w * 0.14, h * 0.12, 0, Math.PI * 0.9, Math.PI * 1.95);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+// 10) 마주 오는 교통 차량 그리기 (좌우로 움직이는 이동형 장애물)
+function drawTrafficCar(ctx, x, y, w, h) {
+  ctx.save();
+  ctx.translate(x, y);
+
+  // 그림자
+  ctx.fillStyle = 'rgba(0,0,0,0.2)';
+  ctx.beginPath();
+  ctx.roundRect(-w / 2 - 2, -h / 2 + 5, w + 4, h, 10);
+  ctx.fill();
+
+  // 바퀴
+  ctx.fillStyle = '#2F3640';
+  ctx.fillRect(-w / 2 - 3, -h / 2 + 9, 5, 12);
+  ctx.fillRect(w / 2 - 2, -h / 2 + 9, 5, 12);
+  ctx.fillRect(-w / 2 - 3, h / 2 - 21, 5, 12);
+  ctx.fillRect(w / 2 - 2, h / 2 - 21, 5, 12);
+
+  // 보라색 바디 (플레이어의 노란 차와 확실히 구분)
+  ctx.fillStyle = '#A29BFE';
+  ctx.beginPath();
+  ctx.roundRect(-w / 2, -h / 2, w, h, 11);
+  ctx.fill();
+  ctx.strokeStyle = '#2F3640';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  // 유리창
+  const glass = ctx.createLinearGradient(0, 0, 0, h / 4);
+  glass.addColorStop(0, '#81ECEC');
+  glass.addColorStop(1, '#E8F4F8');
+  ctx.fillStyle = glass;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.roundRect(-w / 2 + 4, h / 8, w - 8, 13, 4);
+  ctx.fill();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.roundRect(-w / 2 + 5, -h / 3, w - 10, 8, 3);
+  ctx.fill();
+  ctx.stroke();
+
+  // 플레이어를 향한 헤드라이트
+  ctx.fillStyle = '#FFEAA7';
+  ctx.beginPath();
+  ctx.arc(-w / 3, h / 2 - 1, 4, 0, Math.PI * 2);
+  ctx.arc(w / 3, h / 2 - 1, 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.restore();
+}
+
 // --- [아이템 드로잉 함수군] ---
 
 // 1) 코인 렌더링 (빛나는 둥근 금화)
-function drawCoinItem(ctx, x, y, size) {
+function drawCoinItem(ctx, x, y, size, risky) {
   ctx.save();
   ctx.translate(x, y);
 
   // 공전 반짝임 펄스 크기 계산
   const pulse = Math.sin(Date.now() / 120) * 1.5;
   const radius = size / 2 + pulse;
+
+  // 위험 지대에 놓인 고배점 코인은 붉은 경고 링으로 구분
+  if (risky) {
+    ctx.strokeStyle = 'rgba(255, 87, 87, 0.9)';
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([3, 3]);
+    ctx.lineDashOffset = -Date.now() / 60;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius + 7, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
 
   // 외곽선/그림자
   ctx.fillStyle = '#D4AF37';
@@ -995,6 +1139,80 @@ function drawMagnetItem(ctx, x, y, size) {
   ctx.restore();
 }
 
+// 5) 하트 회복 아이템 ❤️ 렌더링
+function drawHeartItem(ctx, x, y, size) {
+  ctx.save();
+  ctx.translate(x, y + Math.sin(Date.now() / 110) * 3);
+
+  ctx.shadowColor = '#FF7675';
+  ctx.shadowBlur = 12;
+
+  const s = size / 22;
+  ctx.fillStyle = '#FF5757';
+  ctx.strokeStyle = '#2F3640';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(0, 9 * s);
+  ctx.bezierCurveTo(-13 * s, -1 * s, -8 * s, -13 * s, 0, -5 * s);
+  ctx.bezierCurveTo(8 * s, -13 * s, 13 * s, -1 * s, 0, 9 * s);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // 반짝이는 하이라이트
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+  ctx.beginPath();
+  ctx.ellipse(-4 * s, -3 * s, 2.6 * s, 3.4 * s, -0.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+// 6) 슬로우모션 모래시계 ⏳ 렌더링
+function drawSlowItem(ctx, x, y, size) {
+  ctx.save();
+  ctx.translate(x, y + Math.sin(Date.now() / 105) * 3);
+
+  ctx.shadowColor = '#A29BFE';
+  ctx.shadowBlur = 10;
+
+  const s = size / 2;
+  ctx.strokeStyle = '#2F3640';
+  ctx.lineWidth = 2.5;
+
+  // 위아래 나무 프레임
+  ctx.fillStyle = '#DFE6E9';
+  ctx.beginPath();
+  ctx.roundRect(-s * 0.78, -s, s * 1.56, 4.5, 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.roundRect(-s * 0.78, s - 4.5, s * 1.56, 4.5, 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // 위아래 유리구 (모래가 담긴 삼각형)
+  ctx.fillStyle = '#A29BFE';
+  ctx.beginPath();
+  ctx.moveTo(-s * 0.6, -s + 4.5);
+  ctx.lineTo(s * 0.6, -s + 4.5);
+  ctx.lineTo(0, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(-s * 0.6, s - 4.5);
+  ctx.lineTo(s * 0.6, s - 4.5);
+  ctx.lineTo(0, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.restore();
+}
+
 
 // --- [게임 시스템 및 라이프사이클 관리] ---
 
@@ -1048,9 +1266,9 @@ function gainScore(baseValue) {
 
 // 레벨 마일스톤 도달 연출
 function checkLevelUp() {
-  if (score < nextLevelScore) return;
+  if (distance < nextLevelDistance) return;
   level++;
-  nextLevelScore += LEVEL_STEP;
+  nextLevelDistance += LEVEL_DISTANCE * Math.pow(LEVEL_GROWTH, level - 1);
   playSound('levelup');
   addFloatingText(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 40, `LEVEL ${level} • SPEED UP!`, '#FF5757');
   shakeTime = 14;
@@ -1065,6 +1283,8 @@ let lastLevel = -1;
 let lastShieldOn = null;
 let lastMagnetOn = null;
 let lastBoosterOn = null;
+let lastSlowOn = null;
+let lastSlipOn = null;
 
 function toggleBadge(el, isOn, lastState) {
   if (isOn !== lastState) {
@@ -1109,6 +1329,19 @@ function updateStatusUI() {
   if (boosterOn) {
     boosterBar.style.width = (boosterTime / BOOSTER_DURATION) * 100 + '%';
   }
+
+  const slowOn = slowTime > 0;
+  lastSlowOn = toggleBadge(badgeSlow, slowOn, lastSlowOn);
+  if (slowOn) {
+    slowBar.style.width = (slowTime / SLOW_DURATION) * 100 + '%';
+  }
+
+  // 웅덩이 디버프도 표시해야 조작이 왜 미끄러운지 납득할 수 있다
+  const slipOn = slipperyTime > 0;
+  lastSlipOn = toggleBadge(badgeSlip, slipOn, lastSlipOn);
+  if (slipOn) {
+    slipBar.style.width = (slipperyTime / SLIPPERY_DURATION) * 100 + '%';
+  }
 }
 
 // 게임 시작 초기화
@@ -1124,11 +1357,14 @@ function startGame() {
   activeShield = false;
   boosterTime = 0;
   magnetTime = 0;
+  slowTime = 0;
+  slipperyTime = 0;
 
   combo = 0;
   comboTimer = 0;
   level = 1;
-  nextLevelScore = LEVEL_STEP;
+  distance = 0;
+  nextLevelDistance = LEVEL_DISTANCE;
   spawnTimer = 0;
   spawnInterval = 70;
 
@@ -1180,6 +1416,8 @@ function triggerGameOver() {
   activeShield = false;
   boosterTime = 0;
   magnetTime = 0;
+  slowTime = 0;
+  slipperyTime = 0;
   updateStatusUI();
 
   // 실시간 획득 점수가 소수점을 가지므로 정수형으로 소수점 절사 보정
@@ -1198,16 +1436,29 @@ function triggerGameOver() {
 function handleCollision(obsIndex) {
   const obs = obstacles[obsIndex];
   
-  // 오일 드럼통일 때는 하트 감소가 아닌 화면 방해 기믹만 작동!
-  if (obs.type === 'oildrum') {
+  // 오일통과 웅덩이는 라이프를 깎지 않는 방해형 함정.
+  // 오일은 시야를, 웅덩이는 조작을 망가뜨린다.
+  if (obs.type === 'oildrum' || obs.type === 'puddle') {
     obstacles.splice(obsIndex, 1);
-    playSound('crash');
-    createCrashParticles(obs.x, obs.y, '#2F3640');
-    // 화면에 물감/오일 튀김 생성
-    triggerScreenOil();
-    addFloatingText(car.x, car.y - 40, "미끌미끌!", "#718093");
-    shakeTime = 8;
-    shakeAmount = 4;
+
+    // 부스터로 질주 중일 땐 함정도 그냥 뚫고 지나간다
+    if (boosterTime > 0) return;
+
+    if (obs.type === 'oildrum') {
+      playSound('crash');
+      createCrashParticles(obs.x, obs.y, '#2F3640');
+      triggerScreenOil();
+      addFloatingText(car.x, car.y - 40, "미끌미끌!", "#718093");
+      shakeTime = 8;
+      shakeAmount = 4;
+    } else {
+      playSound('splash');
+      createCrashParticles(obs.x, obs.y, '#74B9FF');
+      slipperyTime = SLIPPERY_DURATION;
+      addFloatingText(car.x, car.y - 40, "미끄덩!", "#74B9FF");
+      shakeTime = 6;
+      shakeAmount = 3;
+    }
     return;
   }
 
@@ -1323,6 +1574,222 @@ function addFloatingText(x, y, text, color = '#FFD700') {
   });
 }
 
+// --- [패턴 기반 스폰 시스템] ---
+// 장애물을 매번 무작위 위치에 하나씩 떨어뜨리면 죽어도 "운이 나빴다"로만 느껴진다.
+// 손으로 설계한 배치를 통째로 내보내야 플레이어가 형태를 읽고 공략을 익히는 재미가 생긴다.
+
+const OBSTACLE_SPECS = {
+  cone:    { w: 24, h: 32 },
+  rock:    { w: 28, h: 28 },
+  barrier: { w: 62, h: 34 },
+  oildrum: { w: 26, h: 38 },
+  puddle:  { w: 54, h: 26 },
+  car:     { w: 34, h: 56 }
+};
+
+const SPAWN_TOP = -46;
+let patternDepth = 0; // 현재 패턴이 세로로 차지하는 길이 (다음 스폰 간격 계산용)
+
+// t(0~1)를 도로 위 실제 x좌표로 변환. 폭이 있는 오브젝트가 도로 밖으로 새지 않게 보정한다.
+function roadPos(t, w) {
+  return roadX + w / 2 + Math.min(1, Math.max(0, t)) * (roadWidth - w);
+}
+
+function pushObs(type, t, dy = 0, opts = {}) {
+  const spec = OBSTACLE_SPECS[type];
+  obstacles.push({
+    x: roadPos(t, spec.w),
+    y: SPAWN_TOP - dy,
+    width: spec.w,
+    height: spec.h,
+    type: type,
+    scored: false,
+    speedMul: opts.speedMul || 1,
+    vx: opts.vx || 0
+  });
+  if (dy > patternDepth) patternDepth = dy;
+}
+
+function pushItem(type, t, dy = 0, risky = false) {
+  const size = type === 'coin' ? 20 : 25;
+  gameItems.push({
+    x: roadPos(t, size),
+    y: SPAWN_TOP - dy,
+    width: size,
+    height: size,
+    type: type,
+    risky: risky
+  });
+  if (dy > patternDepth) patternDepth = dy;
+}
+
+function randomObstacleType() {
+  const roll = Math.random();
+  if (roll < 0.40) return 'cone';
+  if (roll < 0.68) return 'rock';
+  if (roll < 0.84) return 'barrier';
+  return 'oildrum';
+}
+
+function randomPowerupType() {
+  const roll = Math.random();
+  if (roll < 0.30) return 'shield';
+  if (roll < 0.54) return 'magnet';
+  if (roll < 0.74) return 'booster';
+  if (roll < 0.88) return 'slow';
+  return 'heart';
+}
+
+// 각 패턴은 minLevel(등장 시작 레벨)과 weight(등장 빈도)를 가진다.
+// 레벨이 오를수록 까다로운 패턴이 후보에 추가되어 자연스럽게 난이도가 올라간다.
+const PATTERNS = [
+  {
+    // 기본형: 장애물 하나와 곁들인 코인
+    name: 'single', minLevel: 1, weight: 26, growth: -0.06,
+    build() {
+      const t = Math.random();
+      pushObs(randomObstacleType(), t);
+      if (Math.random() < 0.55) {
+        // 장애물 반대편 안전지대에 코인을 둔다
+        pushItem('coin', t < 0.5 ? t + 0.42 : t - 0.42, 70);
+      }
+    }
+  },
+  {
+    // 코인 트레일: S자로 흐르는 코인 줄기를 따라가면 자연스럽게 장애물을 피하게 된다
+    name: 'coinTrail', minLevel: 1, weight: 18, growth: -0.03,
+    build() {
+      const dir = Math.random() < 0.5 ? 1 : -1;
+      const base = 0.5 - dir * 0.32;
+      for (let i = 0; i < 6; i++) {
+        pushItem('coin', base + dir * (i / 5) * 0.64, i * 46);
+      }
+      // 트레일 옆구리에 장애물을 하나 붙여 경로를 강제한다
+      pushObs(randomObstacleType(), 0.5 + dir * 0.44, 120);
+    }
+  },
+  {
+    // 지그재그: 좌우로 번갈아 나오는 벽. 리듬을 타면 뚫린다
+    name: 'zigzag', minLevel: 1, weight: 16,
+    build() {
+      const dir = Math.random() < 0.5 ? 1 : -1;
+      for (let i = 0; i < 3; i++) {
+        const side = i % 2 === 0 ? dir : -dir;
+        pushObs('barrier', 0.5 + side * 0.5, i * 105);
+        // 빠져나가는 쪽에 코인을 놓아 최적 경로를 알려준다
+        pushItem('coin', 0.5 - side * 0.42, i * 105 + 52);
+      }
+    }
+  },
+  {
+    // 좁은 틈: 양쪽 벽 사이의 한 칸. 틈에 고배점 코인을 박아 위험을 감수하게 만든다
+    name: 'wallGap', minLevel: 2, weight: 14, growth: 0.05,
+    build() {
+      const gapT = 0.2 + Math.random() * 0.6;
+      pushObs('barrier', Math.max(0, gapT - 0.55));
+      pushObs('barrier', Math.min(1, gapT + 0.55));
+      pushItem('coin', gapT, 6, true);
+      pushItem('coin', gapT, 60, true);
+    }
+  },
+  {
+    // 웅덩이밭: 밟아도 죽지는 않지만 접지력을 잃어 다음 구간이 위험해진다
+    name: 'puddleField', minLevel: 2, weight: 11,
+    build() {
+      const count = 2 + Math.floor(Math.random() * 2);
+      for (let i = 0; i < count; i++) {
+        pushObs('puddle', Math.random(), i * 76);
+      }
+      pushItem('coin', Math.random(), 40);
+    }
+  },
+  {
+    // 깔때기: 양쪽에서 조여들어 중앙으로 몰아넣는다
+    name: 'funnel', minLevel: 3, weight: 12, growth: 0.07,
+    build() {
+      pushObs('cone', 0.0, 0);
+      pushObs('cone', 1.0, 0);
+      pushObs('cone', 0.18, 88);
+      pushObs('cone', 0.82, 88);
+      pushObs('rock', 0.34, 176);
+      pushObs('rock', 0.66, 176);
+      pushItem('coin', 0.5, 176, true);
+      pushItem('coin', 0.5, 226);
+    }
+  },
+  {
+    // 교통 체증: 좌우로 흔들리며 천천히 내려오는 차량들
+    name: 'traffic', minLevel: 3, weight: 12, growth: 0.06,
+    build() {
+      const count = 1 + (Math.random() < 0.45 ? 1 : 0);
+      for (let i = 0; i < count; i++) {
+        const dir = Math.random() < 0.5 ? 1 : -1;
+        pushObs('car', 0.25 + Math.random() * 0.5, i * 150, {
+          speedMul: 0.72,             // 플레이어보다 느려서 서서히 다가온다
+          vx: dir * (0.5 + Math.random() * 0.7)
+        });
+      }
+      pushItem('coin', Math.random(), 90);
+    }
+  },
+  {
+    // 시련의 길: 촘촘한 좌우 벽 + 고배점 코인. 고레벨에서만 등장
+    name: 'gauntlet', minLevel: 5, weight: 11, growth: 0.12,
+    build() {
+      const dir = Math.random() < 0.5 ? 1 : -1;
+      for (let i = 0; i < 4; i++) {
+        const side = i % 2 === 0 ? dir : -dir;
+        pushObs('barrier', 0.5 + side * 0.52, i * 92);
+        pushObs('cone', 0.5 - side * 0.05, i * 92 + 46);
+        pushItem('coin', 0.5 - side * 0.46, i * 92 + 46, true);
+      }
+    }
+  },
+  {
+    // 보급: 파워업 하나와 코인 몇 개
+    name: 'powerup', minLevel: 1, weight: 15, growth: -0.02,
+    build() {
+      const t = Math.random();
+      pushItem(randomPowerupType(), t);
+      pushItem('coin', t < 0.5 ? t + 0.3 : t - 0.3, 66);
+      if (Math.random() < 0.5) {
+        pushObs(randomObstacleType(), Math.random(), 130);
+      }
+    }
+  }
+];
+
+// 속도와 스폰 밀도는 LV.6에서 상한에 닿는다. 그 뒤로도 압박이 계속 오르도록
+// 레벨이 높아질수록 까다로운 패턴의 가중치를 키우고 순한 패턴은 줄인다.
+function patternWeight(p) {
+  const bonus = 1 + (level - p.minLevel) * (p.growth || 0);
+  return Math.max(1, p.weight * bonus);
+}
+
+// 현재 레벨에서 뽑을 수 있는 패턴 중 가중치에 따라 하나를 고른다
+function pickPattern() {
+  let total = 0;
+  for (const p of PATTERNS) {
+    if (p.minLevel <= level) total += patternWeight(p);
+  }
+  let roll = Math.random() * total;
+  for (const p of PATTERNS) {
+    if (p.minLevel > level) continue;
+    roll -= patternWeight(p);
+    if (roll <= 0) return p;
+  }
+  return PATTERNS[0];
+}
+
+function spawnPattern(targetSpeed) {
+  patternDepth = 0;
+  pickPattern().build();
+
+  // 패턴 전체가 화면에 진입할 때까지 기다린 뒤 다음 패턴을 내보낸다.
+  // 타이머를 음수로 시작시켜 두면 겹침 없이 자연스러운 간격이 유지된다.
+  spawnTimer = -(patternDepth / Math.max(1, targetSpeed));
+}
+
 function update(dt = 1.0) {
   if (gameState !== 'PLAYING') return;
 
@@ -1352,8 +1819,15 @@ function update(dt = 1.0) {
     targetSpeed = gameSpeed;
   }
 
-  // 2. 스크롤 누적 점수 증가 (부스터 중일 땐 점수 누적 대폭 증가)
+  // 슬로우모션이 걸리면 화면 전체가 느려져 난장판 구간을 헤쳐나갈 여유가 생긴다
+  if (slowTime > 0) {
+    slowTime -= dt;
+    targetSpeed *= SLOW_FACTOR;
+  }
+
+  // 2. 스크롤 누적 점수 및 주행 거리 증가 (부스터 중일 땐 점수 누적 대폭 증가)
   score += DISTANCE_SCORE * (boosterTime > 0 ? 3 : 1) * dt;
+  distance += targetSpeed * dt;
   scoreVal.textContent = Math.floor(score);
   checkLevelUp();
 
@@ -1376,18 +1850,24 @@ function update(dt = 1.0) {
   car.wheelRotation += targetSpeed * 0.15 * dt;
 
   // 4. 좌우 조작 물리 적용 (deltaTime 연동 보정)
+  // 웅덩이를 밟으면 접지력을 잃어 가속은 둔해지고 관성은 오래 남는다.
+  if (slipperyTime > 0) slipperyTime -= dt;
+  const isSlippery = slipperyTime > 0;
+  const accNow = isSlippery ? SLIPPERY_ACC : car.acc;
+  const frictionNow = isSlippery ? SLIPPERY_FRICTION : car.friction;
+
   const moveSpeedModifier = dt;
   if (keys['ArrowLeft'] || keys['a'] || keys['A'] || touchLeftPressed) {
-    car.vx -= car.acc * moveSpeedModifier;
+    car.vx -= accNow * moveSpeedModifier;
     car.angle = Math.max(car.angle - 0.035 * moveSpeedModifier, -0.16);
   } else if (keys['ArrowRight'] || keys['d'] || keys['D'] || touchRightPressed) {
-    car.vx += car.acc * moveSpeedModifier;
+    car.vx += accNow * moveSpeedModifier;
     car.angle = Math.min(car.angle + 0.035 * moveSpeedModifier, 0.16);
   } else {
     car.angle *= Math.pow(0.8, moveSpeedModifier);
   }
 
-  car.vx *= Math.pow(car.friction, moveSpeedModifier);
+  car.vx *= Math.pow(frictionNow, moveSpeedModifier);
   const maxVxWithDt = car.maxVx;
   if (car.vx > maxVxWithDt) car.vx = maxVxWithDt;
   if (car.vx < -maxVxWithDt) car.vx = -maxVxWithDt;
@@ -1457,89 +1937,12 @@ function update(dt = 1.0) {
     }
   });
 
-  // 7. 장애물 및 아이템 주기적 통합 스폰 로직 (dt 반영)
+  // 7. 설계된 패턴 단위로 장애물/아이템을 내보낸다
   spawnTimer += dt;
   if (spawnTimer > spawnInterval) {
-    spawnTimer = 0;
-    // 게임 진행 속도와 레벨에 따라 스폰 밀도가 함께 촘촘해진다
-    spawnInterval = Math.max(30, 75 - (targetSpeed * 4.5) - (level - 1) * 2);
-
-    const rng = Math.random();
-
-    if (rng < 0.65) {
-      // --- [장애물 스폰] ---
-      const typeRoll = Math.random();
-      let type = 'cone';
-      let w = 24, h = 32;
-
-      if (typeRoll < 0.45) {
-        type = 'cone'; w = 24; h = 32;
-      } else if (typeRoll < 0.75) {
-        type = 'rock'; w = 28; h = 28;
-      } else if (typeRoll < 0.90) {
-        type = 'barrier'; w = 62; h = 34; // 2레인 덮는 넓은 바리케이드
-      } else {
-        type = 'oildrum'; w = 26; h = 38; // 오일 스크린 방해형
-      }
-
-      // 회피 불가능한 겹침 스폰 차단:
-      // 신규 장애물을 추가하기 전에 기존 obstacles 배열의 가장 마지막 장애물(가장 최근 스폰)과 Y 거리를 검증하여 최소 140px 이상의 충분한 회피 통로 간격을 보장하도록 설계
-      let safeToSpawn = true;
-      if (obstacles.length > 0) {
-        const lastObstacle = obstacles[obstacles.length - 1];
-        if (lastObstacle.y < 100) { // Y 거리가 최소 140px 이하 (신규 Y가 -40이므로 last.y - (-40) = last.y + 40이 140보다 커야 함, 즉 last.y > 100 이어야 충분한 간격 보장)
-          safeToSpawn = false;
-        }
-      }
-
-      if (safeToSpawn) {
-        // [핵심 버그 수정 및 안전지대 타파]:
-        // 기존 3개 레인 정가운데 스폰에서 탈피하여 좌우 미세 오프셋 무작위 추가, 
-        // 최좌측 및 최우측 도로 가장자리까지 커버되도록 넓고 정교한 타겟 스폰 실시!
-        let spawnX;
-        if (type === 'barrier') {
-          // 넓은 바리케이드는 도로 내부 무작위 중심부에 정밀 배치
-          spawnX = Math.random() * (roadWidth - w) + roadX + w/2;
-        } else {
-          // 일반 장애물: 도로의 최좌측 경계(roadX)부터 최우측 경계(roadX + roadWidth)까지 
-          // 꼼수가 완전히 없도록 완전 무작위 촘촘 스폰 설계!
-          spawnX = Math.random() * (roadWidth - w - 8) + roadX + w/2 + 4;
-        }
-
-        obstacles.push({
-          x: spawnX,
-          y: -40,
-          width: w,
-          height: h,
-          type: type,
-          scored: false // 니어미스 판정을 한 번만 주기 위한 플래그
-        });
-      }
-
-    } else {
-      // --- [아이템 스폰] ---
-      const itemRoll = Math.random();
-      let itype = 'coin';
-      if (itemRoll < 0.70) {
-        itype = 'coin';
-      } else if (itemRoll < 0.82) {
-        itype = 'shield';
-      } else if (itemRoll < 0.92) {
-        itype = 'magnet';
-      } else {
-        itype = 'booster';
-      }
-
-      // 아이템 역시 도로 위 다양한 영역에 무작위 배치
-      const spawnX = Math.random() * (roadWidth - 30) + roadX + 15;
-      gameItems.push({
-        x: spawnX,
-        y: -30,
-        width: itype === 'coin' ? 20 : 25,
-        height: itype === 'coin' ? 20 : 25,
-        type: itype
-      });
-    }
+    // 패턴과 패턴 사이의 숨 돌릴 틈. 속도와 레벨이 오를수록 짧아진다.
+    spawnInterval = Math.max(22, 52 - (targetSpeed * 2.2) - (level - 1) * 1.5);
+    spawnPattern(targetSpeed);
   }
 
   // 8. 아이템 루프 처리 (자석 연출 포함)
@@ -1576,10 +1979,28 @@ function update(dt = 1.0) {
       // 아이템 효과 발현!
       if (it.type === 'coin') {
         addCombo();
-        const gain = gainScore(COIN_SCORE);
+        const gain = gainScore(it.risky ? RISKY_COIN_SCORE : COIN_SCORE);
         playSound('coin');
-        addFloatingText(it.x, it.y, `+${gain}`, "#FED330");
-        createCrashParticles(it.x, it.y, '#FFD700');
+        addFloatingText(it.x, it.y, `+${gain}`, it.risky ? "#FF5757" : "#FED330");
+        createCrashParticles(it.x, it.y, it.risky ? '#FF7675' : '#FFD700');
+      } else if (it.type === 'heart') {
+        // 라이프가 가득 찼다면 회복 대신 점수로 환산해 준다
+        if (lives < MAX_LIVES) {
+          lives++;
+          updateHeartsUI();
+          playSound('heal');
+          addFloatingText(car.x, car.y - 45, "하트 회복 ❤️", "#FF5757");
+        } else {
+          const gain = gainScore(HEART_FULL_SCORE);
+          playSound('coin');
+          addFloatingText(car.x, car.y - 45, `가득참! +${gain}`, "#FF5757");
+        }
+        createCrashParticles(it.x, it.y, '#FF7675');
+      } else if (it.type === 'slow') {
+        slowTime = SLOW_DURATION;
+        playSound('slow');
+        addFloatingText(car.x, car.y - 45, "슬로우모션 ⏳", "#A29BFE");
+        createCrashParticles(it.x, it.y, '#A29BFE');
       } else if (it.type === 'shield') {
         activeShield = true;
         playSound('item');
@@ -1607,7 +2028,16 @@ function update(dt = 1.0) {
   // 9. 장애물 업데이트 및 충돌 판단
   for (let i = obstacles.length - 1; i >= 0; i--) {
     const obs = obstacles[i];
-    obs.y += targetSpeed * dt;
+    // 교통 차량은 플레이어보다 느리게 내려오며 좌우로 흔들린다
+    obs.y += targetSpeed * (obs.speedMul || 1) * dt;
+
+    if (obs.vx) {
+      obs.x += obs.vx * dt;
+      const minX = roadX + obs.width / 2;
+      const maxX = roadX + roadWidth - obs.width / 2;
+      if (obs.x < minX) { obs.x = minX; obs.vx *= -1; }
+      if (obs.x > maxX) { obs.x = maxX; obs.vx *= -1; }
+    }
 
     if (obs.y > GAME_HEIGHT + 30) {
       obstacles.splice(i, 1);
@@ -1751,20 +2181,31 @@ function draw() {
     }
   });
 
-  // 6. 아이템 그리기
+  // 6. 웅덩이는 도로에 깔린 함정이므로 아이템/차량보다 먼저 바닥에 깔아준다
+  obstacles.forEach(obs => {
+    if (obs.type === 'puddle') {
+      drawPuddle(ctx, obs.x, obs.y, obs.width, obs.height);
+    }
+  });
+
+  // 7. 아이템 그리기
   gameItems.forEach(it => {
     if (it.type === 'coin') {
-      drawCoinItem(ctx, it.x, it.y, it.width);
+      drawCoinItem(ctx, it.x, it.y, it.width, it.risky);
     } else if (it.type === 'shield') {
       drawShieldItem(ctx, it.x, it.y, it.width);
     } else if (it.type === 'magnet') {
       drawMagnetItem(ctx, it.x, it.y, it.width);
     } else if (it.type === 'booster') {
       drawBoosterItem(ctx, it.x, it.y, it.width);
+    } else if (it.type === 'heart') {
+      drawHeartItem(ctx, it.x, it.y, it.width);
+    } else if (it.type === 'slow') {
+      drawSlowItem(ctx, it.x, it.y, it.width);
     }
   });
 
-  // 7. 장애물 그리기
+  // 8. 입체 장애물 그리기
   obstacles.forEach(obs => {
     if (obs.type === 'cone') {
       drawCone(ctx, obs.x, obs.y, obs.width, obs.height);
@@ -1774,10 +2215,12 @@ function draw() {
       drawBarrier(ctx, obs.x, obs.y, obs.width, obs.height);
     } else if (obs.type === 'oildrum') {
       drawOilDrum(ctx, obs.x, obs.y, obs.width, obs.height);
+    } else if (obs.type === 'car') {
+      drawTrafficCar(ctx, obs.x, obs.y, obs.width, obs.height);
     }
   });
 
-  // 8. 플레이어 배기가스 먼지 그리기
+  // 9. 플레이어 배기가스 먼지 그리기
   dustParticles.forEach(d => {
     ctx.save();
     ctx.globalAlpha = d.alpha;
@@ -1788,10 +2231,10 @@ function draw() {
     ctx.restore();
   });
 
-  // 9. 플레이어 장난감 자동차 그리기
+  // 10. 플레이어 장난감 자동차 그리기
   drawPlayer();
 
-  // 10. 충돌 파티클 그리기
+  // 11. 충돌 파티클 그리기
   particles.forEach(p => {
     ctx.save();
     ctx.globalAlpha = p.alpha;
@@ -1802,7 +2245,7 @@ function draw() {
     ctx.restore();
   });
 
-  // 11. 고속 스피드라인 그리기
+  // 12. 고속 스피드라인 그리기
   if (speedLines.length > 0) {
     ctx.save();
     ctx.strokeStyle = boosterTime > 0 ? 'rgba(0, 206, 201, 0.4)' : 'rgba(255, 255, 255, 0.25)';
@@ -1816,7 +2259,7 @@ function draw() {
     ctx.restore();
   }
 
-  // 12. 통통 뜨는 텍스트 그리기
+  // 13. 통통 뜨는 텍스트 그리기
   floatingTexts.forEach(ft => {
     ctx.save();
     ctx.globalAlpha = ft.alpha;
@@ -1833,7 +2276,7 @@ function draw() {
     ctx.restore();
   });
 
-  // 13. 피버 모드일 때 화면 가장자리 네온 아우라 광원 연출
+  // 14. 피버 모드일 때 화면 가장자리 네온 아우라 광원 연출
   if (boosterTime > 0) {
     ctx.save();
     ctx.strokeStyle = 'rgba(0, 222, 201, 0.45)';
@@ -1842,7 +2285,16 @@ function draw() {
     ctx.restore();
   }
 
-  // 14. 오일 스크린 번짐 연출 그리기 (가장 위에 덧칠)
+  // 15. 슬로우모션 중에는 보랏빛 테두리로 시간이 늘어졌음을 알린다
+  if (slowTime > 0) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(162, 155, 254, 0.5)';
+    ctx.lineWidth = 12;
+    ctx.strokeRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    ctx.restore();
+  }
+
+  // 16. 오일 스크린 번짐 연출 그리기 (가장 위에 덧칠)
   screenOils.forEach(oil => {
     ctx.save();
     ctx.globalAlpha = oil.alpha;

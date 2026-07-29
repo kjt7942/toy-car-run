@@ -240,6 +240,14 @@ html, body {
 
 #badgeMagnet .badge-bar > i { background: #FF7675; }
 #badgeBooster .badge-bar > i { background: #00DEC9; }
+#badgeSlow .badge-bar > i { background: #A29BFE; }
+
+/* 디버프 배지는 테두리를 붉게 해서 버프와 구분 */
+.item-badge.debuff {
+  border-color: var(--accent-color);
+}
+
+#badgeSlip .badge-bar > i { background: #74B9FF; }
 
 /* 오버레이 스크린 (시작, 게임오버) */
 .overlay-screen {
