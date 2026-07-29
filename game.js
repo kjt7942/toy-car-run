@@ -15,6 +15,17 @@ const heartContainer = document.getElementById('heartContainer');
 const touchLeft = document.getElementById('touchLeft');
 const touchRight = document.getElementById('touchRight');
 
+// 콤보 및 아이템 상태 표시 엘리먼트
+const levelVal = document.getElementById('levelVal');
+const comboBox = document.getElementById('comboBox');
+const comboMultEl = document.getElementById('comboMult');
+const comboGauge = document.getElementById('comboGauge');
+const badgeShield = document.getElementById('badgeShield');
+const badgeMagnet = document.getElementById('badgeMagnet');
+const badgeBooster = document.getElementById('badgeBooster');
+const magnetBar = badgeMagnet.querySelector('.badge-bar > i');
+const boosterBar = badgeBooster.querySelector('.badge-bar > i');
+
 // 가상 해상도 설정 (Canvas 내부 조율용 고정 비율)
 const GAME_WIDTH = 360;
 const GAME_HEIGHT = 640;
@@ -23,16 +34,38 @@ const GAME_HEIGHT = 640;
 let gameState = 'START'; // START, PLAYING, GAMEOVER
 let score = 0;
 let highscore = parseInt(localStorage.getItem('toycar_highscore'), 10) || 0;
-let lives = 3;
+const MAX_LIVES = 3;
+let lives = MAX_LIVES;
 let keys = {};
 let touchLeftPressed = false;
 let touchRightPressed = false;
 
 // 게임 밸런스 및 물리 상수 (초반 난이도를 쫄깃하게 4.8로 상향, 가속 및 최고속도 버프)
 let gameSpeed = 4.8;
-const BASE_SPEED = 4.8;       
-const MAX_SPEED = 11.0;        
-const SPEED_INC = 0.0005;      
+const BASE_SPEED = 4.8;
+const MAX_SPEED = 12.0;
+// 최고 속도까지 3분 30초가 걸려 초반이 늘어지던 문제를 해결. 약 80초면 최고 속도에 도달한다.
+const SPEED_INC = 0.0015;
+
+// --- [점수 및 콤보 밸런스] ---
+// 기존에는 이미 60fps로 정규화된 dt를 16.6으로 한 번 더 나눠 주행 점수가 초당 3.6점에 그쳤다.
+// 그 탓에 전체 점수의 90% 이상이 코인에서 나와 "멀리 달리는" 재미가 죽어 있었다.
+const DISTANCE_SCORE = 1;   // 프레임당 1점 = 초당 60점
+const COIN_SCORE = 100;
+const NEARMISS_SCORE = 60;
+const DESTROY_SCORE = 120;
+
+// 콤보: 코인 획득과 아슬아슬 회피로 쌓이고, 피격하거나 일정 시간 놀면 사라진다.
+let combo = 0;
+let comboTimer = 0;
+const COMBO_DURATION = 240; // 4초 안에 다음 획득이 없으면 콤보 소멸
+const COMBO_STEP = 3;       // 3회마다 배수 1단계 상승
+const MAX_COMBO_MULT = 8;
+
+// 레벨 마일스톤 (일정 점수마다 속도/밀도 상승 연출)
+const LEVEL_STEP = 1500;
+let level = 1;
+let nextLevelScore = LEVEL_STEP;
 
 // 화면 흔들림(Screen Shake)
 let shakeTime = 0;
@@ -251,6 +284,28 @@ function playSound(type) {
       osc.start(now);
       osc.stop(now + 0.9);
     } 
+    else if (type === 'nearmiss') {
+      // 스쳐 지나갈 때의 짧고 산뜻한 "핑!" 신호음
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(1180, now);
+      osc.frequency.exponentialRampToValueAtTime(1720, now + 0.07);
+      gainNode.gain.setValueAtTime(0.05, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+      osc.start(now);
+      osc.stop(now + 0.12);
+    }
+    else if (type === 'levelup') {
+      // 레벨 상승 팡파레 (도-미-솔 상승 아르페지오)
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(523.25, now);        // C5
+      osc.frequency.setValueAtTime(659.25, now + 0.09); // E5
+      osc.frequency.setValueAtTime(783.99, now + 0.18); // G5
+      osc.frequency.setValueAtTime(1046.50, now + 0.27); // C6
+      gainNode.gain.setValueAtTime(0.13, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+      osc.start(now);
+      osc.stop(now + 0.45);
+    }
     else if (type === 'crash') {
       // 쾅! 하는 둔탁한 폭발성 소리
       osc.type = 'sawtooth';
@@ -287,8 +342,14 @@ function resizeCanvas() {
 // 2. 키보드 입력 핸들링
 window.addEventListener('keydown', (e) => {
   keys[e.key] = true;
-  if (['ArrowUp', 'ArrowDown', ' ', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+  if (['ArrowUp', 'ArrowDown', ' ', 'ArrowLeft', 'ArrowRight', 'Enter'].includes(e.key)) {
     e.preventDefault();
+  }
+
+  // 러너 장르의 생명은 "한 판만 더"의 마찰이 없는 것.
+  // 대기/게임오버 상태에서 Space 또는 Enter로 즉시 재시작한다.
+  if (!e.repeat && (e.key === ' ' || e.key === 'Enter') && gameState !== 'PLAYING') {
+    startGame();
   }
 });
 window.addEventListener('keyup', (e) => {
@@ -940,11 +1001,113 @@ function drawMagnetItem(ctx, x, y, size) {
 // 하트 UI 실시간 갱신
 function updateHeartsUI() {
   heartContainer.innerHTML = '';
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < MAX_LIVES; i++) {
     const heart = document.createElement('span');
     heart.className = 'heart';
     heart.textContent = i < lives ? '❤️' : '🖤';
     heartContainer.appendChild(heart);
+  }
+}
+
+// --- [콤보 시스템] ---
+function getComboMult() {
+  return Math.min(MAX_COMBO_MULT, 1 + Math.floor(combo / COMBO_STEP));
+}
+
+// 코인 획득/아슬아슬 회피 성공 시 콤보 적립
+function addCombo() {
+  const prevMult = getComboMult();
+  combo++;
+  comboTimer = COMBO_DURATION;
+
+  const newMult = getComboMult();
+  // 배수가 한 단계 올라간 순간에만 요란하게 알려준다
+  if (newMult > prevMult) {
+    addFloatingText(car.x, car.y - 62, `COMBO x${newMult}!`, '#FFDE59');
+    comboBox.classList.remove('pop');
+    void comboBox.offsetWidth; // 애니메이션 재생을 위한 리플로우 강제
+    comboBox.classList.add('pop');
+  }
+}
+
+// 피격 시 콤보 소멸
+function resetCombo() {
+  if (combo >= COMBO_STEP) {
+    addFloatingText(car.x, car.y - 62, 'COMBO BREAK...', '#B2BEC3');
+  }
+  combo = 0;
+  comboTimer = 0;
+}
+
+// 점수 획득 통합 처리 (콤보 배수 자동 적용)
+function gainScore(baseValue) {
+  const gain = Math.round(baseValue * getComboMult());
+  score += gain;
+  return gain;
+}
+
+// 레벨 마일스톤 도달 연출
+function checkLevelUp() {
+  if (score < nextLevelScore) return;
+  level++;
+  nextLevelScore += LEVEL_STEP;
+  playSound('levelup');
+  addFloatingText(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 40, `LEVEL ${level} • SPEED UP!`, '#FF5757');
+  shakeTime = 14;
+  shakeAmount = 5;
+}
+
+// --- [콤보/아이템 상태 HUD 갱신] ---
+// 매 프레임 DOM을 건드리면 낭비이므로 값이 바뀐 항목만 갱신한다.
+let lastComboVisible = null;
+let lastComboMult = -1;
+let lastLevel = -1;
+let lastShieldOn = null;
+let lastMagnetOn = null;
+let lastBoosterOn = null;
+
+function toggleBadge(el, isOn, lastState) {
+  if (isOn !== lastState) {
+    el.classList.toggle('visible', isOn);
+  }
+  return isOn;
+}
+
+function updateStatusUI() {
+  // 콤보 박스
+  const comboVisible = combo > 0;
+  if (comboVisible !== lastComboVisible) {
+    comboBox.classList.toggle('visible', comboVisible);
+    lastComboVisible = comboVisible;
+  }
+  if (comboVisible) {
+    const mult = getComboMult();
+    if (mult !== lastComboMult) {
+      comboMultEl.textContent = 'x' + mult;
+      lastComboMult = mult;
+    }
+    comboGauge.style.width = Math.max(0, (comboTimer / COMBO_DURATION) * 100) + '%';
+  }
+
+  // 레벨 표기
+  if (level !== lastLevel) {
+    levelVal.textContent = 'LV.' + level;
+    lastLevel = level;
+  }
+
+  // 아이템 잔여시간 배지
+  lastShieldOn = toggleBadge(badgeShield, activeShield, lastShieldOn);
+
+  const magnetOn = magnetTime > 0;
+  lastMagnetOn = toggleBadge(badgeMagnet, magnetOn, lastMagnetOn);
+  if (magnetOn) {
+    magnetBar.style.width = (magnetTime / MAGNET_DURATION) * 100 + '%';
+  }
+
+  const boosterOn = boosterTime > 0;
+  lastBoosterOn = toggleBadge(badgeBooster, boosterOn, lastBoosterOn);
+  if (boosterOn) {
+    boosterBar.style.width = (boosterTime / BOOSTER_DURATION) * 100 + '%';
   }
 }
 
@@ -955,13 +1118,20 @@ function startGame() {
   playSound('item'); // 게임 시작 뾰로롱
   gameState = 'PLAYING';
   score = 0;
-  lives = 3;
+  lives = MAX_LIVES;
   gameSpeed = BASE_SPEED;
   invincibleTime = 0;
   activeShield = false;
   boosterTime = 0;
   magnetTime = 0;
-  
+
+  combo = 0;
+  comboTimer = 0;
+  level = 1;
+  nextLevelScore = LEVEL_STEP;
+  spawnTimer = 0;
+  spawnInterval = 70;
+
   car.x = GAME_WIDTH / 2;
   car.vx = 0;
   car.angle = 0;
@@ -988,9 +1158,14 @@ function startGame() {
 
   scoreVal.textContent = score;
   updateHeartsUI();
+  updateStatusUI();
 
   startScreen.classList.remove('active');
   gameOverScreen.classList.remove('active');
+
+  // 버튼에 포커스가 남아 있으면 Space/Enter 재시작이 버튼 클릭과 중복 발동한다
+  startBtn.blur();
+  restartBtn.blur();
 }
 
 // 게임 오버
@@ -998,7 +1173,15 @@ function triggerGameOver() {
   stopBgm(); // 배경음 중단
   playSound('gameover'); // 패배 하강 멜로디
   gameState = 'GAMEOVER';
-  
+
+  // 게임오버 후에도 콤보/아이템 배지가 화면에 남지 않도록 상태 정리
+  combo = 0;
+  comboTimer = 0;
+  activeShield = false;
+  boosterTime = 0;
+  magnetTime = 0;
+  updateStatusUI();
+
   // 실시간 획득 점수가 소수점을 가지므로 정수형으로 소수점 절사 보정
   const roundedScore = Math.floor(score);
   
@@ -1033,10 +1216,11 @@ function handleCollision(obsIndex) {
     obstacles.splice(obsIndex, 1);
     playSound('crash');
     createCrashParticles(obs.x, obs.y, '#FFD700');
-    addFloatingText(obs.x, obs.y, "파괴!!", "#00DEC9");
+    addCombo();
+    const gain = gainScore(DESTROY_SCORE);
+    addFloatingText(obs.x, obs.y, `파괴!! +${gain}`, "#00DEC9");
     shakeTime = 6;
     shakeAmount = 5;
-    score += 150; // 파괴 보너스 점수!
     return;
   }
 
@@ -1058,7 +1242,8 @@ function handleCollision(obsIndex) {
   playSound('crash');
   lives--;
   updateHeartsUI();
-  
+  resetCombo();
+
   shakeTime = 20;
   shakeAmount = 10;
   createCrashParticles(car.x, car.y - 10, '#FF7675');
@@ -1168,15 +1353,27 @@ function update(dt = 1.0) {
   }
 
   // 2. 스크롤 누적 점수 증가 (부스터 중일 땐 점수 누적 대폭 증가)
-  score += (boosterTime > 0 ? 3 : 1) * (dt / 16.6);
+  score += DISTANCE_SCORE * (boosterTime > 0 ? 3 : 1) * dt;
   scoreVal.textContent = Math.floor(score);
+  checkLevelUp();
 
   // 3. 타이머 제어
   if (invincibleTime > 0) invincibleTime -= dt;
   if (magnetTime > 0) magnetTime -= dt;
 
+  // 콤보 지속시간 감소 (제한 시간 안에 다음 획득이 없으면 소멸)
+  if (comboTimer > 0) {
+    comboTimer -= dt;
+    if (comboTimer <= 0) {
+      combo = 0;
+      comboTimer = 0;
+    }
+  }
+
+  updateStatusUI();
+
   // 바퀴 회전 애니용 각도 증가
-  car.wheelRotation += targetSpeed * 0.15 * (dt / 16.6);
+  car.wheelRotation += targetSpeed * 0.15 * dt;
 
   // 4. 좌우 조작 물리 적용 (deltaTime 연동 보정)
   const moveSpeedModifier = dt;
@@ -1264,8 +1461,8 @@ function update(dt = 1.0) {
   spawnTimer += dt;
   if (spawnTimer > spawnInterval) {
     spawnTimer = 0;
-    // 게임 진행 속도에 따라 서서히 빨라짐
-    spawnInterval = Math.max(38, 75 - (targetSpeed * 4.5));
+    // 게임 진행 속도와 레벨에 따라 스폰 밀도가 함께 촘촘해진다
+    spawnInterval = Math.max(30, 75 - (targetSpeed * 4.5) - (level - 1) * 2);
 
     const rng = Math.random();
 
@@ -1314,7 +1511,8 @@ function update(dt = 1.0) {
           y: -40,
           width: w,
           height: h,
-          type: type
+          type: type,
+          scored: false // 니어미스 판정을 한 번만 주기 위한 플래그
         });
       }
 
@@ -1377,9 +1575,10 @@ function update(dt = 1.0) {
     ) {
       // 아이템 효과 발현!
       if (it.type === 'coin') {
-        score += 150;
+        addCombo();
+        const gain = gainScore(COIN_SCORE);
         playSound('coin');
-        addFloatingText(it.x, it.y, "+150 COIN!", "#FED330");
+        addFloatingText(it.x, it.y, `+${gain}`, "#FED330");
         createCrashParticles(it.x, it.y, '#FFD700');
       } else if (it.type === 'shield') {
         activeShield = true;
@@ -1418,12 +1617,11 @@ function update(dt = 1.0) {
     // 고도화된 충돌 판정 박스 (회전 각도 정밀 보정 및 내부 마진 적용)
     // 차량 폭에 각도에 따른 수축 가중치(Math.cos(car.angle))를 적용하고, 억울한 충돌 방지를 위한 마진 패딩 적용
     const angleCos = Math.abs(Math.cos(car.angle));
-    const angleSin = Math.abs(Math.sin(car.angle));
-    
+
     // 회전에 의해 실제로 투영되는 가상의 폭과 높이 산출 (회전 각도 보정 가중치와 안전 마진 적용)
     // base hitBoxScale = 0.65. 각도가 0이 아닐 때 Math.cos(car.angle)을 통해 수축 연동.
     const baseScale = 0.65;
-    
+
     // 폭에는 회전 각도가 있을 때 억울함을 덜 느끼도록 Math.cos(car.angle) 수축 가중치를 추가로 적용 (회전 시 차량의 유효 가로 폭 충돌 감지 축소)
     const carWidthScale = baseScale * angleCos;
     const carHeightScale = baseScale;
@@ -1444,10 +1642,25 @@ function update(dt = 1.0) {
       carBottom > obsTop &&
       carTop < obsBottom
     ) {
-      // 1. 부스터 피버(boosterTime > 0) 중이거나, 보호막이 켜져있거나(activeShield), 아예 무적 상태가 아닐 때(invincibleTime <= 0)만 충돌을 감지해 처리합니다.
-      // 2. 만약 순수 무적 타이밍(invincibleTime > 0)이고 보호막도 꺼져 있다면, 깜빡거리면서 장애물을 통과하는 정상 연출이 나옵니다.
-      if (activeShield || boosterTime > 0 || invincibleTime <= 0) {
+      // 1. 부스터 피버 중에는 장애물을 들이받아 파괴하고, 무적이 아닐 때는 정상적으로 피해를 입습니다.
+      // 2. 순수 무적 타이밍(invincibleTime > 0)에는 깜빡이며 그대로 통과합니다.
+      //    이때 보호막을 조건에 넣으면 무적 중인데도 배리어가 소모되어 버리므로 제외했습니다.
+      if (boosterTime > 0 || invincibleTime <= 0) {
         handleCollision(i);
+        continue;
+      }
+    }
+
+    // 니어미스 판정: 장애물이 차량 옆을 스치듯 지나간 순간 보너스와 콤보를 준다.
+    // 위험을 감수하고 아슬아슬하게 붙어서 피할수록 이득이 되는 리스크-리워드 장치.
+    if (!obs.scored && obs.y > car.y + car.height / 2) {
+      obs.scored = true;
+      const gap = Math.abs(car.x - obs.x) - (car.width + obs.width) / 2;
+      if (gap >= 0 && gap < 16) {
+        addCombo();
+        const gain = gainScore(NEARMISS_SCORE);
+        playSound('nearmiss');
+        addFloatingText(car.x, car.y - 30, `아슬아슬! +${gain}`, '#FFDE59');
       }
     }
   }

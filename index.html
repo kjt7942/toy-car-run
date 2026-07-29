@@ -23,12 +23,35 @@
       <div class="hud-item score-container">
         <span class="hud-label">SCORE</span>
         <span id="scoreVal" class="hud-value">0</span>
+        <span id="levelVal" class="hud-level">LV.1</span>
       </div>
       <div class="hud-item life-container">
         <div id="heartContainer">
           <span class="heart">❤️</span>
           <span class="heart">❤️</span>
           <span class="heart">❤️</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 콤보 배수 & 아이템 지속시간 레이어 -->
+    <div id="statusBar">
+      <div id="comboBox">
+        <span id="comboMult">x1</span>
+        <span class="combo-label">COMBO</span>
+        <div class="combo-gauge"><i id="comboGauge"></i></div>
+      </div>
+      <div id="itemStatus">
+        <div class="item-badge" id="badgeShield">
+          <span class="badge-icon">🛡️</span>
+        </div>
+        <div class="item-badge" id="badgeMagnet">
+          <span class="badge-icon">🧲</span>
+          <div class="badge-bar"><i></i></div>
+        </div>
+        <div class="item-badge" id="badgeBooster">
+          <span class="badge-icon">⚡</span>
+          <div class="badge-bar"><i></i></div>
         </div>
       </div>
     </div>
@@ -45,6 +68,8 @@
         <div class="instructions-box">
           <p>⌨️ <strong>PC 조작:</strong> 방향키 ◀ ▶ 또는 A / D</p>
           <p>📱 <strong>모바일:</strong> 하단 좌/우 영역 터치</p>
+          <p>🔥 <strong>콤보:</strong> 코인 획득과 아슬아슬 회피로 배수 UP!</p>
+          <p>🔄 <strong>바로 재시작:</strong> Space 또는 Enter</p>
         </div>
 
         <button id="startBtn" class="btn-primary">게임 시작하기!</button>
