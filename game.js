@@ -17,6 +17,9 @@ const touchLeft = document.getElementById('touchLeft');
 const touchRight = document.getElementById('touchRight');
 const controlBtn = document.getElementById('controlBtn');
 const ctrlHint = document.getElementById('ctrlHint');
+const dragSensRow = document.getElementById('dragSensRow');
+const dragSens = document.getElementById('dragSens');
+const dragSensVal = document.getElementById('dragSensVal');
 
 // 콤보 및 아이템 상태 표시 엘리먼트
 const levelVal = document.getElementById('levelVal');
@@ -83,7 +86,8 @@ function defaultSave() {
     unlocked: ['classic'],
     selected: 'classic',
     muted: false,
-    control: 'buttons'   // 'buttons' | 'drag'
+    control: 'buttons',  // 'buttons' | 'drag'
+    dragSens: 7          // 1(느긋) ~ 10(예민)
   };
 }
 
@@ -97,6 +101,8 @@ function loadSave() {
       if (!Array.isArray(merged.scores)) merged.scores = [];
       if (!Array.isArray(merged.unlocked) || merged.unlocked.length === 0) merged.unlocked = ['classic'];
       if (!merged.achievements || typeof merged.achievements !== 'object') merged.achievements = {};
+      // 감도가 깨져 있으면 조향이 아예 먹통이 되므로 범위를 강제한다
+      if (!(merged.dragSens >= 1 && merged.dragSens <= 10)) merged.dragSens = 7;
       return merged;
     }
   } catch (e) {
@@ -610,16 +616,24 @@ touchRight.addEventListener('mouseleave', () => touchRightPressed = false);
 // 4. 드래그 조작 (옵션)
 // 버튼을 정확히 눌러야 하는 부담 없이 화면 아무 곳이나 잡고 좌우로 밀어 조향한다.
 // 물리는 그대로 두고 기존 두 플래그만 세팅해 두 조작법이 같은 코드를 쓰게 한다.
-const DRAG_DEADZONE = 10;  // CSS px. 이보다 작은 손떨림은 무시
-const DRAG_THROW = 40;     // 기준점이 손가락에서 멀어질 수 있는 최대 거리 (가상 조이스틱 반경)
+// 조이스틱 반경(throw)이 곧 반응 속도다. 반경만큼 되밀어야 방향이 바뀌므로
+// 크면 굼뜨고 작으면 예민하다. 화면 크기와 손 크기가 기기마다 달라
+// 하나로 고정할 수 없으니 감도 1~10으로 사용자가 직접 맞춘다.
+let dragThrow = 25;    // 기준점이 손가락에서 멀어질 수 있는 최대 거리 (CSS px)
+let dragDeadzone = 6;  // 이보다 작은 손떨림은 무시
 let dragAnchorX = 0;
+
+function applyDragSens() {
+  dragThrow = 60 - (save.dragSens - 1) * 5.8;   // 감도 1 → 60px(느긋), 10 → 8px(예민)
+  dragDeadzone = Math.max(3, dragThrow * 0.25);
+}
 
 function applyDrag(x) {
   // 기준점을 손가락 뒤에 붙여 따라가게 해서, 방향을 되돌릴 때 화면 끝까지 되밀지 않아도 되게 한다
-  dragAnchorX = Math.min(Math.max(dragAnchorX, x - DRAG_THROW), x + DRAG_THROW);
+  dragAnchorX = Math.min(Math.max(dragAnchorX, x - dragThrow), x + dragThrow);
   const dx = x - dragAnchorX;
-  touchLeftPressed = dx < -DRAG_DEADZONE;
-  touchRightPressed = dx > DRAG_DEADZONE;
+  touchLeftPressed = dx < -dragDeadzone;
+  touchRightPressed = dx > dragDeadzone;
 }
 
 touchControls.addEventListener('touchstart', (e) => {
@@ -649,6 +663,19 @@ function updateControlButton() {
   touchControls.classList.toggle('drag-mode', drag);
   if (controlBtn) controlBtn.textContent = drag ? '📱 조작: 드래그' : '📱 조작: 버튼';
   if (ctrlHint) ctrlHint.textContent = drag ? '화면을 잡고 좌우로 밀기' : '하단 좌/우 영역 터치';
+  // 감도는 드래그를 쓸 때만 의미가 있으니 그때만 노출한다
+  if (dragSensRow) dragSensRow.classList.toggle('hidden', !drag);
+  if (dragSens) dragSens.value = save.dragSens;
+  if (dragSensVal) dragSensVal.textContent = save.dragSens;
+  applyDragSens();
+}
+
+if (dragSens) {
+  dragSens.addEventListener('input', () => {
+    save.dragSens = parseInt(dragSens.value, 10);
+    persistSave();
+    updateControlButton();
+  });
 }
 
 

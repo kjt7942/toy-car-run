@@ -417,6 +417,32 @@ html, body {
   flex: 0 0 52px;
 }
 
+/* 드래그 감도 슬라이더 (드래그 조작일 때만 노출) */
+.opt-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 0.9rem;
+  font-weight: bold;
+  color: var(--dark);
+}
+
+.opt-row.hidden {
+  display: none;
+}
+
+.opt-row input[type="range"] {
+  flex: 1;
+  accent-color: var(--primary-color);
+  min-width: 0;
+}
+
+.opt-row b {
+  flex: 0 0 20px;
+  text-align: right;
+}
+
 /* 기록/차고 화면은 내용이 길어 스크롤을 허용 */
 .screen-content.scrollable {
   max-height: 86%;
