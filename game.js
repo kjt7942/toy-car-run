@@ -48,6 +48,7 @@ const achList = document.getElementById('achList');
 const achProgress = document.getElementById('achProgress');
 const garageCoins = document.getElementById('garageCoins');
 const carList = document.getElementById('carList');
+const saleNote = document.getElementById('saleNote');
 const recordBanner = document.getElementById('recordBanner');
 const runCoinsVal = document.getElementById('runCoinsVal');
 const runComboVal = document.getElementById('runComboVal');
@@ -171,6 +172,13 @@ const CARS = [
   { id: 'gold',    name: '골드',     cost: 5000,  body: '#FFD700', stripe: '#B8860B', spoiler: '#B8860B' },
   { id: 'rainbow', name: '레인보우', cost: 9000,  body: null,      stripe: '#FFFFFF', spoiler: '#2F3640' }
 ];
+
+// 테스트 이벤트: 모든 차량을 기본 차량과 같은 값으로 할인한다.
+// 끄면 원래 가격표로 돌아간다.
+const CAR_SALE = true;
+function carCost(skin) {
+  return CAR_SALE ? CARS[0].cost : skin.cost;
+}
 
 function getSelectedCar() {
   return CARS.find(c => c.id === save.selected) || CARS[0];
@@ -616,43 +624,59 @@ touchRight.addEventListener('mouseleave', () => touchRightPressed = false);
 // 4. 드래그 조작 (옵션)
 // 버튼을 정확히 눌러야 하는 부담 없이 화면 아무 곳이나 잡고 좌우로 밀어 조향한다.
 // 물리는 그대로 두고 기존 두 플래그만 세팅해 두 조작법이 같은 코드를 쓰게 한다.
-// 조이스틱 반경(throw)이 곧 반응 속도다. 반경만큼 되밀어야 방향이 바뀌므로
-// 크면 굼뜨고 작으면 예민하다. 화면 크기와 손 크기가 기기마다 달라
-// 하나로 고정할 수 없으니 감도 1~10으로 사용자가 직접 맞춘다.
-let dragThrow = 25;    // 기준점이 손가락에서 멀어질 수 있는 최대 거리 (CSS px)
-let dragDeadzone = 6;  // 이보다 작은 손떨림은 무시
-let dragAnchorX = 0;
+// 방향만 넘기는 가상 조이스틱은 반경만큼 되밀어야 방향이 바뀌어 늘 한 박자 늦었다.
+// 대신 손가락이 움직인 만큼 차를 그 자리로 끌어당긴다. 손가락과 차가 1:1로 붙어 움직여
+// "어디까지 밀어야 도는지" 감을 잡을 필요가 없다.
+// 감도는 손가락 이동량 대비 차가 따라오는 비율이다.
+let dragGain = 1.5;
+let dragTargetX = null;   // 차가 가야 할 게임 좌표. null이면 드래그 조작 중이 아님
+let dragAnchorX = 0;      // 손가락을 처음 댄 화면 좌표
+let dragAnchorCarX = 0;   // 그때의 차 위치
+let dragScale = 1;        // 화면 CSS px → 게임 좌표 환산 (기기 해상도 차이 흡수)
 
 function applyDragSens() {
-  dragThrow = 60 - (save.dragSens - 1) * 5.8;   // 감도 1 → 60px(느긋), 10 → 8px(예민)
-  dragDeadzone = Math.max(3, dragThrow * 0.25);
+  dragGain = 0.4 + save.dragSens * 0.16;   // 감도 1 → 0.56배, 7 → 1.52배, 10 → 2.0배
 }
 
-function applyDrag(x) {
-  // 기준점을 손가락 뒤에 붙여 따라가게 해서, 방향을 되돌릴 때 화면 끝까지 되밀지 않아도 되게 한다
-  dragAnchorX = Math.min(Math.max(dragAnchorX, x - dragThrow), x + dragThrow);
-  const dx = x - dragAnchorX;
-  touchLeftPressed = dx < -dragDeadzone;
-  touchRightPressed = dx > dragDeadzone;
+function beginDrag(x) {
+  dragAnchorX = x;
+  dragAnchorCarX = car.x;
+  dragTargetX = car.x;
+  dragScale = GAME_WIDTH / (canvas.getBoundingClientRect().width || GAME_WIDTH);
+}
+
+function moveDrag(x) {
+  const left = roadX + car.width / 2;
+  const right = roadX + roadWidth - car.width / 2;
+  let target = dragAnchorCarX + (x - dragAnchorX) * dragScale * dragGain;
+
+  // 도로 밖까지 밀어붙였을 때 기준점을 다시 잡지 않으면, 되돌릴 때 그 초과분만큼
+  // 손가락만 움직이고 차는 가만히 있는 먹통 구간이 생긴다.
+  if (target < left || target > right) {
+    target = Math.min(Math.max(target, left), right);
+    dragAnchorX = x;
+    dragAnchorCarX = target;
+  }
+  dragTargetX = target;
 }
 
 touchControls.addEventListener('touchstart', (e) => {
   if (save.control !== 'drag') return;
   e.preventDefault();
   isTouchDevice = true;
-  dragAnchorX = e.touches[0].clientX;
-  touchLeftPressed = touchRightPressed = false;
+  beginDrag(e.touches[0].clientX);
 }, { passive: false });
 
 touchControls.addEventListener('touchmove', (e) => {
   if (save.control !== 'drag') return;
   e.preventDefault();
-  applyDrag(e.touches[0].clientX);
+  moveDrag(e.touches[0].clientX);
 }, { passive: false });
 
 function endDrag(e) {
   if (save.control !== 'drag') return;
   e.preventDefault();
+  dragTargetX = null;
   touchLeftPressed = touchRightPressed = false;
 }
 touchControls.addEventListener('touchend', endDrag, { passive: false });
@@ -1539,12 +1563,14 @@ function renderStats() {
 
 function renderGarage() {
   garageCoins.textContent = save.coins.toLocaleString();
+  if (saleNote) saleNote.classList.toggle('hidden', !CAR_SALE);
   carList.innerHTML = '';
 
   for (const skin of CARS) {
     const owned = save.unlocked.includes(skin.id);
     const selected = save.selected === skin.id;
-    const affordable = !owned && save.coins >= skin.cost;
+    const cost = carCost(skin);
+    const affordable = !owned && save.coins >= cost;
 
     const card = document.createElement('div');
     card.className = 'car-card' +
@@ -1556,7 +1582,8 @@ function renderGarage() {
     const swatchColor = skin.body || 'hsl(300, 85%, 62%)';
     const status = owned
       ? (selected ? '<span class="car-status owned">선택됨</span>' : '<span class="car-status owned">보유</span>')
-      : `<span class="car-status${affordable ? ' affordable' : ''}">🪙 ${skin.cost.toLocaleString()}</span>`;
+      : `<span class="car-status${affordable ? ' affordable' : ''}">🪙 ${cost.toLocaleString()}` +
+        (CAR_SALE && skin.cost > cost ? ` <s>${skin.cost.toLocaleString()}</s>` : '') + '</span>';
 
     card.innerHTML =
       `<div class="car-swatch" style="background:${swatchColor}; --stripe:${skin.stripe}"></div>` +
@@ -1572,8 +1599,8 @@ function selectOrBuyCar(skin) {
   if (save.unlocked.includes(skin.id)) {
     save.selected = skin.id;
     playSound('item');
-  } else if (save.coins >= skin.cost) {
-    save.coins -= skin.cost;
+  } else if (save.coins >= carCost(skin)) {
+    save.coins -= carCost(skin);
     save.unlocked.push(skin.id);
     save.selected = skin.id;
     playSound('levelup');
@@ -1684,6 +1711,10 @@ function startGame() {
   magnetTime = 0;
   slowTime = 0;
   slipperyTime = 0;
+
+  // 이전 판에서 손가락을 뗀 위치가 남아 있으면 새 판 시작하자마자 차가 그리로 튄다
+  dragTargetX = null;
+  touchLeftPressed = touchRightPressed = false;
 
   combo = 0;
   comboTimer = 0;
@@ -2256,7 +2287,12 @@ function update(dt = 1.0) {
   const frictionNow = isSlippery ? SLIPPERY_FRICTION : car.friction;
 
   const moveSpeedModifier = dt;
-  if (keys['ArrowLeft'] || keys['a'] || keys['A'] || touchLeftPressed) {
+  if (dragTargetX !== null) {
+    // 손가락이 가리키는 자리로 끌어당긴다. 가까워질수록 힘을 빼서 목표 주변에서 떨지 않게 한다.
+    const pull = Math.max(-1, Math.min(1, (dragTargetX - car.x) / 10));
+    car.vx += accNow * pull * moveSpeedModifier;
+    car.angle += (pull * 0.16 - car.angle) * Math.min(1, 0.25 * moveSpeedModifier);
+  } else if (keys['ArrowLeft'] || keys['a'] || keys['A'] || touchLeftPressed) {
     car.vx -= accNow * moveSpeedModifier;
     car.angle = Math.max(car.angle - 0.035 * moveSpeedModifier, -0.16);
   } else if (keys['ArrowRight'] || keys['d'] || keys['D'] || touchRightPressed) {
@@ -2787,8 +2823,12 @@ document.querySelectorAll('.close-screen').forEach(btn => {
   });
 });
 
+// e.scale은 사파리 전용 속성이라 크롬/안드로이드에서는 undefined다.
+// undefined !== 1 이 항상 참이 되어 모든 touchmove를 막았고, 그 탓에 기록/차고 화면이
+// 스크롤되지 않아 아래 내용과 닫기 버튼에 닿을 수 없었다.
+// 실제로 막아야 하는 건 손가락 두 개로 하는 핀치 확대뿐이다.
 document.addEventListener('touchmove', (e) => {
-  if (e.scale !== 1) {
+  if (e.touches.length > 1) {
     e.preventDefault();
   }
 }, { passive: false });

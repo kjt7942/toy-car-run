@@ -428,8 +428,21 @@ html, body {
   color: var(--dark);
 }
 
-.opt-row.hidden {
+.opt-row.hidden,
+.sale-note.hidden {
   display: none;
+}
+
+.sale-note {
+  color: var(--accent-color);
+  font-size: 0.95rem;
+  font-weight: bold;
+  margin-bottom: 6px;
+}
+
+.car-status s {
+  opacity: 0.55;
+  font-weight: normal;
 }
 
 .opt-row input[type="range"] {
