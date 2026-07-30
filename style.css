@@ -365,25 +365,42 @@ html, body {
   font-weight: 900;
 }
 
-/* 버튼 디자인 */
+/* 버튼 디자인 (3D 장난감 버튼) */
 .btn-primary {
-  background: var(--primary-color);
+  background: linear-gradient(180deg, #FFEAA7 0%, var(--primary-color) 100%);
   color: var(--dark);
   border: 4px solid var(--dark);
   border-radius: var(--radius-md);
   padding: 14px 28px;
   font-size: 1.35rem;
   font-family: var(--font-family);
-  font-weight: bold;
+  font-weight: 900;
   cursor: pointer;
-  box-shadow: 0 6px 0px var(--dark);
-  transition: all 0.1s ease;
+  box-shadow: 0 7px 0px var(--dark), 0 10px 15px rgba(0,0,0,0.15);
+  transition: all 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   width: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-primary::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 8px;
+  right: 8px;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 4px;
+}
+
+.btn-primary:hover {
+  filter: brightness(1.05);
 }
 
 .btn-primary:active {
-  transform: translateY(4px);
-  box-shadow: 0 2px 0px var(--dark);
+  transform: translateY(5px);
+  box-shadow: 0 2px 0px var(--dark), 0 4px 6px rgba(0,0,0,0.1);
 }
 
 /* 보조 버튼 (기록 / 차고 / 음소거) */
@@ -395,9 +412,27 @@ html, body {
 
 .btn-secondary {
   flex: 1;
-  background: var(--white);
+  background: linear-gradient(180deg, #FFFFFF 0%, #F1F2F6 100%);
   color: var(--dark);
   border: 3px solid var(--dark);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  font-size: 1rem;
+  font-family: var(--font-family);
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 4px 0px var(--dark);
+  transition: all 0.1s ease;
+}
+
+.btn-secondary:hover {
+  background: #FFFFFF;
+}
+
+.btn-secondary:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0px var(--dark);
+}
   border-radius: var(--radius-md);
   padding: 9px 6px;
   font-size: 0.95rem;
