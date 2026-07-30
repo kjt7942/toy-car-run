@@ -11,7 +11,7 @@
 //  4. 좌표계는 360x640 고정이다.
 //
 //  미술 스타일: 쨍하고 선명한 세련된 아케이드 (닌텐도/카트라이더 감성의 
-//             맑고 깨끗한 팝 컬러, 또렷한 라인, 간결하고 강렬한 이펙트)
+//             맑고 깨끗한 팝 컬러, 앙증맞은 캐릭터, 네온 블루 쉴드 이펙트)
 // ===========================================================================
 
 const OUTLINE_COLOR = '#1E272E'; // 쨍하고 또렷한 아케이드 다크 네이비 외곽선
@@ -310,21 +310,31 @@ function drawPlayer() {
   ctx.fill();
   ctx.stroke();
 
-  // --- [액티브 시각효과: 선명한 배리어 보호막] ---
+  // --- [액티브 시각효과: 선명한 파랑 계열 네온 쉴드 이펙트] ---
   if (activeShield) {
     ctx.save();
     const shieldScale = 1.25 + Math.sin(Date.now() / 80) * 0.04;
-    ctx.strokeStyle = '#05C46B';
+    // 쨍하고 영롱한 로얄 블루 / 시안 네온 링
+    ctx.strokeStyle = '#00A8FF';
     ctx.lineWidth = 3.5;
-    ctx.shadowColor = '#2ED573';
-    ctx.shadowBlur = 10;
+    ctx.shadowColor = '#00CEC9';
+    ctx.shadowBlur = 12;
 
     ctx.beginPath();
     ctx.arc(0, 0, car.height * 0.65 * shieldScale, 0, Math.PI * 2);
     ctx.stroke();
 
-    ctx.fillStyle = 'rgba(5, 196, 107, 0.15)';
+    // 안쪽 파란 네온 은은한 광채
+    ctx.fillStyle = 'rgba(0, 168, 255, 0.16)';
     ctx.fill();
+
+    // 안쪽 보조 하이라이트 링
+    ctx.strokeStyle = '#74B9FF';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(0, 0, car.height * 0.54 * shieldScale, 0, Math.PI * 2);
+    ctx.stroke();
+
     ctx.restore();
   }
 
@@ -605,7 +615,7 @@ function drawTrafficCar(ctx, x, y, w, h) {
   ctx.restore();
 }
 
-// 12) 길 건너는 보행자 & 동물 (치면 안 되는 캐릭터)
+// 12) 길 건너는 보행자 & 동물 (귀엽고 앙증맞게 개선됨)
 function drawCrosser(ctx, obs) {
   const w = obs.width;
   const h = obs.height;
@@ -648,14 +658,14 @@ function drawCrosser(ctx, obs) {
   ctx.restore();
 }
 
-// 보행자: 레고 피규어 스타일
+// 앙증맞고 귀여운 레고 팝 피규어 보행자
 function drawWalkerBody(ctx, w, h, dir, swing, tone) {
-  const headR = 7.5;
-  const headY = -h / 2 + headR + 1;
+  const headR = 8;
+  const headY = -h / 2 + headR;
   const bodyTop = headY + headR - 1;
-  const bodyH = h / 2 + 1;
+  const bodyH = h / 2;
 
-  // 다리
+  // 뒤쪽/앞쪽 다리 & 귀여운 운동화
   ctx.strokeStyle = OUTLINE_COLOR;
   ctx.lineWidth = 3.5;
   ctx.beginPath();
@@ -665,15 +675,15 @@ function drawWalkerBody(ctx, w, h, dir, swing, tone) {
   ctx.lineTo(3 + swing, h / 2 - 1);
   ctx.stroke();
 
-  // 신발
-  ctx.fillStyle = '#3B3B98';
+  // 앙증맞은 미니 스니커즈
+  ctx.fillStyle = '#FF3838';
   ctx.beginPath();
-  ctx.ellipse(3 + swing + dir * 1.2, h / 2, 2.6, 1.6, 0, 0, Math.PI * 2);
-  ctx.ellipse(-2 - swing + dir * 1.2, h / 2, 2.6, 1.6, 0, 0, Math.PI * 2);
+  ctx.ellipse(3 + swing + dir * 1.2, h / 2, 2.8, 1.8, 0, 0, Math.PI * 2);
+  ctx.ellipse(-2 - swing + dir * 1.2, h / 2, 2.8, 1.8, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // 몸통
-  ctx.fillStyle = tone || '#38ADA9';
+  // 몸통 (파스텔 셔츠)
+  ctx.fillStyle = tone || '#54A0FF';
   ctx.strokeStyle = OUTLINE_COLOR;
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -689,8 +699,8 @@ function drawWalkerBody(ctx, w, h, dir, swing, tone) {
   ctx.lineTo(dir * (w / 2 - 4) + swing * 0.8, bodyTop + 12);
   ctx.stroke();
 
-  // 머리
-  ctx.fillStyle = '#FFEAA7';
+  // 뽀얀 둥근 얼굴
+  ctx.fillStyle = '#FFE0BD';
   ctx.strokeStyle = OUTLINE_COLOR;
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -698,43 +708,49 @@ function drawWalkerBody(ctx, w, h, dir, swing, tone) {
   ctx.fill();
   ctx.stroke();
 
-  // 머리카락
-  ctx.fillStyle = '#4A3728';
+  // 앙증맞은 볼터치 (핑크 뺨)
+  ctx.fillStyle = 'rgba(255, 118, 117, 0.6)';
   ctx.beginPath();
-  ctx.arc(0, headY, headR, Math.PI * 1.08, Math.PI * 2.02);
+  ctx.arc(dir * 3.5, headY + 3.5, 2, 0, Math.PI * 2);
   ctx.fill();
 
-  // 눈
+  // 깔끔한 머리카락 (모자/헤어)
+  ctx.fillStyle = '#57606F';
+  ctx.beginPath();
+  ctx.arc(0, headY, headR, Math.PI * 1.1, Math.PI * 1.95);
+  ctx.fill();
+
+  // 또렷하고 앙증맞은 눈
   ctx.fillStyle = OUTLINE_COLOR;
   ctx.beginPath();
-  ctx.arc(dir * 2.6, headY + 1.5, 1.5, 0, Math.PI * 2);
+  ctx.arc(dir * 2.8, headY + 1.2, 1.6, 0, Math.PI * 2);
   ctx.fill();
 }
 
-// 동물: 앙증맞은 노란 강아지
+// 앙증맞고 통통한 아기 강아지/고양이
 function drawCritterBody(ctx, w, h, dir, swing, tone) {
   const fur = tone || '#FFD32A';
-  const headX = dir * (w / 2 - 6);
+  const headX = dir * (w / 2 - 5);
 
-  // 꼬리
+  // 살랑거리는 꼬리
   ctx.strokeStyle = OUTLINE_COLOR;
-  ctx.lineWidth = 2.2;
+  ctx.lineWidth = 2.4;
   ctx.beginPath();
   ctx.moveTo(-dir * (w / 2 - 5), -1);
   ctx.quadraticCurveTo(
-    -dir * (w / 2 + 1), -4 + swing * 0.6,
+    -dir * (w / 2 + 2), -5 + swing * 0.6,
     -dir * (w / 2 - 1), -10 + swing * 0.6
   );
   ctx.stroke();
 
-  // 다리
-  ctx.lineWidth = 2.8;
+  // 짧고 앙증맞은 다리
+  ctx.lineWidth = 3;
   ctx.beginPath();
-  ctx.moveTo(-4, h / 2 - 7); ctx.lineTo(-4 - swing * 0.5, h / 2 - 1);
-  ctx.moveTo(4, h / 2 - 7);  ctx.lineTo(4 + swing * 0.5, h / 2 - 1);
+  ctx.moveTo(-4, h / 2 - 6); ctx.lineTo(-4 - swing * 0.5, h / 2 - 1);
+  ctx.moveTo(4, h / 2 - 6);  ctx.lineTo(4 + swing * 0.5, h / 2 - 1);
   ctx.stroke();
 
-  // 몸통
+  // 통통 털 몸통
   ctx.fillStyle = fur;
   ctx.strokeStyle = OUTLINE_COLOR;
   ctx.lineWidth = 2;
@@ -743,36 +759,33 @@ function drawCritterBody(ctx, w, h, dir, swing, tone) {
   ctx.fill();
   ctx.stroke();
 
-  // 머리
+  // 둥근 머리
   ctx.beginPath();
-  ctx.arc(headX, -2, 7, 0, Math.PI * 2);
+  ctx.arc(headX, -2, 7.5, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
 
-  // 귀
+  // 쫑긋 귀 2개 (귀 안쪽 핑크 포인트!)
+  ctx.fillStyle = fur;
   ctx.beginPath();
-  ctx.moveTo(headX - 4.5, -7);
-  ctx.lineTo(headX - 5.5, -14);
-  ctx.lineTo(headX - 0.5, -8.5);
-  ctx.closePath();
+  ctx.arc(headX - 4.5, -9, 3.5, 0, Math.PI * 2);
+  ctx.arc(headX + 4.5, -9, 3.5, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
 
+  ctx.fillStyle = '#FF7675';
   ctx.beginPath();
-  ctx.moveTo(headX + 4.5, -7);
-  ctx.lineTo(headX + 5.5, -14);
-  ctx.lineTo(headX + 0.5, -8.5);
-  ctx.closePath();
+  ctx.arc(headX - 4.5, -9, 2, 0, Math.PI * 2);
+  ctx.arc(headX + 4.5, -9, 2, 0, Math.PI * 2);
   ctx.fill();
-  ctx.stroke();
 
-  // 눈 코
+  // 앙증맞은 눈 코
   ctx.fillStyle = OUTLINE_COLOR;
   ctx.beginPath();
-  ctx.arc(headX + dir * 1.5, -3.5, 1.6, 0, Math.PI * 2);
+  ctx.arc(headX + dir * 2, -3.5, 1.6, 0, Math.PI * 2);
   ctx.fill();
   ctx.beginPath();
-  ctx.arc(headX + dir * 5.5, 0, 1.8, 0, Math.PI * 2);
+  ctx.arc(headX + dir * 5.8, -0.5, 1.8, 0, Math.PI * 2);
   ctx.fill();
 }
 
@@ -917,7 +930,7 @@ function drawBoosterItem(ctx, x, y, size) {
   ctx.restore();
 }
 
-// 3) 쉴드 🛡️
+// 3) 파랑 계열 보호막 쉴드 🛡️ (블루/시안 팝 톤)
 function drawShieldItem(ctx, x, y, size) {
   ctx.save();
   ctx.translate(x, y);
@@ -925,8 +938,8 @@ function drawShieldItem(ctx, x, y, size) {
   const bounce = Math.sin(Date.now() / 110) * 3.5;
   ctx.translate(0, bounce);
 
-  // 쨍한 캔디 에메랄드
-  ctx.fillStyle = '#05C46B';
+  // 쨍하고 영롱한 로얄 아쿠아 블루
+  ctx.fillStyle = '#00A8FF';
   ctx.strokeStyle = OUTLINE_COLOR;
   ctx.lineWidth = 2.5;
   ctx.beginPath();
@@ -940,9 +953,9 @@ function drawShieldItem(ctx, x, y, size) {
   ctx.fill();
   ctx.stroke();
 
-  // 십자 반짝이
-  ctx.strokeStyle = '#FFFFFF';
-  ctx.lineWidth = 2;
+  // 십자 반짝이 하이라이트
+  ctx.strokeStyle = '#E0F7FA';
+  ctx.lineWidth = 2.2;
   ctx.beginPath();
   ctx.moveTo(0, -size / 3);
   ctx.lineTo(0, size / 3);
@@ -1069,7 +1082,7 @@ function drawGate(ctx, x, y, w, h, bonus) {
   ctx.stroke();
 
   // 현수막
-  ctx.fillStyle = bonus ? '#FFD32A' : '#2ED573';
+  ctx.fillStyle = bonus ? '#FFD700' : '#2ED573';
   ctx.beginPath();
   ctx.roundRect(-half + 6, -h / 2, w - 12, h * 0.62, 5);
   ctx.fill();
