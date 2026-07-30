@@ -500,61 +500,90 @@ function drawBarrier(ctx, x, y, w, h) {
   ctx.restore();
 }
 
-// 9) 어두운 갈색 직관적인 3D 오일 드럼통
+// 9) 참고 이미지(orca-paste) 기반의 3D 스틸 차콜 메탈 드럼통
 function drawOilDrum(ctx, x, y, w, h) {
   ctx.save();
   ctx.translate(x, y);
 
-  // 그림자
-  ctx.fillStyle = 'rgba(0,0,0,0.18)';
+  // 바닥 그림자
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
   ctx.beginPath();
-  ctx.ellipse(0, h / 2 + 1, w * 0.55, 3.5, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, h / 2 + 1, w * 0.52, 3.5, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.strokeStyle = OUTLINE_COLOR;
-  ctx.lineWidth = OUTLINE_WIDTH;
+  const rx = w / 2;
+  const ry = 4; // 타원 곡률
 
-  // 1. 메인 드럼통 바디 (어두운 클래식 다크 브라운 원통)
-  ctx.fillStyle = '#5D4037';
-  ctx.beginPath();
-  ctx.roundRect(-w / 2, -h / 2 + 3, w, h - 3, 4);
-  ctx.fill();
-  ctx.stroke();
-
-  // 2. 강철 3중 리벳 수평선 링
-  ctx.strokeStyle = '#8D6E63';
-  ctx.lineWidth = 2.5;
-
-  ctx.beginPath();
-  ctx.moveTo(-w / 2, -h / 4);
-  ctx.lineTo(w / 2, -h / 4);
-  ctx.moveTo(-w / 2, 0);
-  ctx.lineTo(w / 2, 0);
-  ctx.moveTo(-w / 2, h / 4);
-  ctx.lineTo(w / 2, h / 4);
-  ctx.stroke();
-
-  // 3. 드럼통 상단 타원형 입체 뚜껑 (원통의 입체감 파악 포인트)
-  ctx.fillStyle = '#6D4C41';
+  // 1. 하단 입체 림 (Bottom Rim)
+  ctx.fillStyle = '#2B2E34';
   ctx.strokeStyle = OUTLINE_COLOR;
   ctx.lineWidth = OUTLINE_WIDTH;
   ctx.beginPath();
-  ctx.ellipse(0, -h / 2 + 3, w / 2, 3.5, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, h / 2 - ry, rx, ry, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
 
-  // 주유구 마크
-  ctx.fillStyle = '#3E2723';
+  // 2. 메인 드럼통 스틸 수직 바디 (수직 메탈 광택 그라데이션)
+  const bodyGrad = ctx.createLinearGradient(-rx, 0, rx, 0);
+  bodyGrad.addColorStop(0, '#22252A');
+  bodyGrad.addColorStop(0.25, '#3A3F47');
+  bodyGrad.addColorStop(0.62, '#718093'); // 선명한 은빛 금속 반사 하이라이트
+  bodyGrad.addColorStop(0.85, '#3A3F47');
+  bodyGrad.addColorStop(1, '#1C1E22');
+
+  ctx.fillStyle = bodyGrad;
   ctx.beginPath();
-  ctx.arc(-w / 4, -h / 2 + 3, 2.2, 0, Math.PI * 2);
+  ctx.moveTo(-rx, -h / 2 + ry);
+  ctx.lineTo(-rx, h / 2 - ry);
+  ctx.ellipse(0, h / 2 - ry, rx, ry, 0, Math.PI, 0, true);
+  ctx.lineTo(rx, -h / 2 + ry);
+  ctx.ellipse(0, -h / 2 + ry, rx, ry, 0, 0, Math.PI, true);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // 3. 중앙 볼록한 2개의 입체 융기 리브 링 (Rib Rings / Ridges)
+  const drawRibRing = (ryPos) => {
+    ctx.strokeStyle = OUTLINE_COLOR;
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    ctx.ellipse(0, ryPos, rx + 1, ry + 0.5, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.strokeStyle = '#718093'; // 은빛 링 하이라이트
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.ellipse(0, ryPos - 0.8, rx, ry, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  };
+
+  drawRibRing(-h / 6); // 상단 리브 링
+  drawRibRing(h / 6);  // 하단 리브 링
+
+  // 4. 상단 뚜껑 테두리 & 패인 뚜껑 (Top Rim & Lid)
+  ctx.fillStyle = '#2B2E34';
+  ctx.strokeStyle = OUTLINE_COLOR;
+  ctx.lineWidth = OUTLINE_WIDTH;
+  ctx.beginPath();
+  ctx.ellipse(0, -h / 2 + ry, rx, ry, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // 뚜껑 안쪽 오목 패널
+  ctx.fillStyle = '#3A3F47';
+  ctx.beginPath();
+  ctx.ellipse(0, -h / 2 + ry, rx - 2.5, ry - 1.2, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // 4. 전면 쨍한 오일 방울 위험 마크
-  ctx.fillStyle = '#FFD32A';
+  // 5. 우측 상단 은색 금속 주유 마개 캡 (Silver Cap / Bung)
+  const capX = rx * 0.55;
+  const capY = -h / 2 + ry - 0.5;
+
+  ctx.fillStyle = '#F5F6FA';
   ctx.strokeStyle = OUTLINE_COLOR;
   ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.arc(0, 3, 4.5, 0, Math.PI * 2);
+  ctx.ellipse(capX, capY - 1.5, 3.5, 2, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
 
