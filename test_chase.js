@@ -49,8 +49,11 @@ const ctx = vm.createContext({
 
 // index.html과 같은 순서로 읽어들인다. game.js의 draw()가 sprites.js의 함수를 부르므로
 // 스프라이트 파일이 빠지면 첫 프레임에서 바로 터진다.
+// 경로는 반드시 이 파일 기준(__dirname)이어야 한다. 절대경로로 박아 두면 워크트리를
+// 나눠 병렬 작업할 때 남의 폴더 코드를 검사하고서 통과했다고 착각하게 된다.
+const path = require('path');
 for (const file of ['sprites.js', 'game.js']) {
-  vm.runInContext(fs.readFileSync('D:/ai_project/toy-car-run/' + file, 'utf8'), ctx, { filename: file });
+  vm.runInContext(fs.readFileSync(path.join(__dirname, file), 'utf8'), ctx, { filename: file });
 }
 const run = (code) => vm.runInContext(code, ctx);
 
