@@ -576,7 +576,7 @@ function drawBarrier(ctx, x, y, w, h) {
   ctx.restore();
 }
 
-// 9) 참고 이미지(orca-paste) 기반의 3D 스틸 차콜 메탈 드럼통
+// 9) 참고 이미지(orca-paste) 기반의 3D 스틸 차콜 메탈 드럼통 (자연스러운 융기 링)
 function drawOilDrum(ctx, x, y, w, h) {
   ctx.save();
   ctx.translate(x, y);
@@ -618,19 +618,32 @@ function drawOilDrum(ctx, x, y, w, h) {
   ctx.fill();
   ctx.stroke();
 
-  // 3. 중앙 볼록한 2개의 입체 융기 리브 링 (Rib Rings / Ridges)
+  // 3. 어색함 없는 자연스러운 전면 볼록 입체 융기 링 (Rib Rings / Ridges)
   const drawRibRing = (ryPos) => {
-    ctx.strokeStyle = OUTLINE_COLOR;
+    ctx.save();
+
+    // 링 베이스 호
+    ctx.strokeStyle = '#2B2E34';
     ctx.lineWidth = 3.5;
     ctx.beginPath();
-    ctx.ellipse(0, ryPos, rx + 1, ry + 0.5, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, ryPos, rx + 0.5, ry, 0, 0, Math.PI);
     ctx.stroke();
 
-    ctx.strokeStyle = '#718093'; // 은빛 링 하이라이트
-    ctx.lineWidth = 1.8;
+    // 링 상단 밝은 하이라이트 라인
+    ctx.strokeStyle = '#8895A7';
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.ellipse(0, ryPos - 0.8, rx, ry, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, ryPos - 0.8, rx + 0.3, ry, 0, 0, Math.PI);
     ctx.stroke();
+
+    // 링 하단 그림자 라인
+    ctx.strokeStyle = '#1C1E22';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.ellipse(0, ryPos + 1, rx + 0.3, ry, 0, 0, Math.PI);
+    ctx.stroke();
+
+    ctx.restore();
   };
 
   drawRibRing(-h / 6); // 상단 리브 링
