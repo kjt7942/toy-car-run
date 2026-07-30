@@ -1,5 +1,5 @@
 // ===========================================================================
-//  sprites.js — 스프라이트 드로잉 전용 파일 (화사한 비비드 팝 토이 스타일)
+//  sprites.js — 스프라이트 드로잉 전용 파일 (담백하고 깔끔한 미니멀 플랫 토이)
 // ===========================================================================
 //  이 파일은 "그림 그리는 코드"만 모아둔 곳이다. 게임 규칙·물리·점수 계산은
 //  전부 game.js에 있으므로, 비주얼을 손볼 때는 이 파일만 고치면 된다.
@@ -10,224 +10,179 @@
 //  3. 외부 이미지·폰트·CDN을 쓰지 말 것.
 //  4. 좌표계는 360x640 고정이다.
 //
-//  미술 스타일: 맑고 쨍하며 화사한 비비드 팝 토이 (밝고 채도 높은 팝 컬러, 
-//             산뜻한 파스텔 톤, 귀여운 하이라이트)
+//  미술 스타일: 담백하고 정갈한 미니멀 플랫 토이 (군더더기 없는 간결한 형태,
+//             산뜻하고 깔끔한 컬러, 슬림하고 명확한 2px 테두리)
 // ===========================================================================
 
-const OUTLINE_COLOR = '#2C3E50'; // 또렷하지만 무겁지 않은 산뜻한 다크 네이비 외곽선
-const OUTLINE_WIDTH = 2.5;
+const OUTLINE_COLOR = '#2C3E50'; // 정갈하고 깔끔한 다크 네이비 외곽선
+const OUTLINE_WIDTH = 2;       // 군더더기 없이 슬림한 선 두께
 
-// 1) 푹신하고 화사한 장난감 구름 그리기
+// 1) 정갈하고 군더더기 없는 미니멀 구름
 function drawCloud(ctx, x, y, size) {
   ctx.save();
   ctx.translate(x, y);
 
-  // 구름 밑 맑고 투명한 그림자
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+  // 얇고 은은한 밑 그림자
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.06)';
   ctx.beginPath();
-  ctx.ellipse(size * 0.7, size * 0.4, size * 1.1, size * 0.4, 0, 0, Math.PI * 2);
+  ctx.ellipse(size * 0.6, size * 0.35, size * 0.9, size * 0.3, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // 구름 몽실몽실 순백 바디
+  // 순백 미니멀 구름
   ctx.fillStyle = '#FFFFFF';
   ctx.strokeStyle = OUTLINE_COLOR;
-  ctx.lineWidth = 2;
+  ctx.lineWidth = OUTLINE_WIDTH;
 
   ctx.beginPath();
-  ctx.arc(0, 0, size * 0.7, 0, Math.PI * 2);
-  ctx.arc(size * 0.6, -size * 0.25, size * 0.65, 0, Math.PI * 2);
-  ctx.arc(size * 1.2, 0, size * 0.55, 0, Math.PI * 2);
-  ctx.arc(size * 0.6, size * 0.2, size * 0.6, 0, Math.PI * 2);
+  ctx.arc(0, 0, size * 0.65, 0, Math.PI * 2);
+  ctx.arc(size * 0.55, -size * 0.2, size * 0.55, 0, Math.PI * 2);
+  ctx.arc(size * 1.1, 0, size * 0.5, 0, Math.PI * 2);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
 
-  // 상단 볼륨 하이라이트
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-  ctx.beginPath();
-  ctx.arc(size * 0.55, -size * 0.35, size * 0.35, 0, Math.PI * 2);
-  ctx.fill();
-
   ctx.restore();
 }
 
-// 2) 화사한 캔디 그린 장난감 나무 그리기
+// 2) 담백하고 깔끔한 미니멀 장난감 나무
 function drawTree(ctx, x, y) {
   ctx.save();
 
-  // 나무 접지 그림자
-  ctx.fillStyle = 'rgba(0,0,0,0.12)';
+  // 깔끔한 접지 그림자
+  ctx.fillStyle = 'rgba(0,0,0,0.1)';
   ctx.beginPath();
-  ctx.ellipse(x, y + 20, 14, 5, 0, 0, Math.PI * 2);
+  ctx.ellipse(x, y + 18, 12, 4, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // 통나무 기둥 (따뜻한 밝은 밀크 브라운)
-  ctx.fillStyle = '#A0522D';
+  // 나무 기둥 (단정한 통나무)
+  ctx.fillStyle = '#8D6E63';
   ctx.strokeStyle = OUTLINE_COLOR;
   ctx.lineWidth = OUTLINE_WIDTH;
   ctx.beginPath();
-  ctx.roundRect(x - 6, y - 2, 12, 22, 4);
+  ctx.roundRect(x - 5, y, 10, 20, 3);
   ctx.fill();
   ctx.stroke();
 
-  // 풍성하고 쨍한 파스텔 나뭇잎
-  ctx.fillStyle = '#10AC84'; // 바탕 녹색
+  // 깔끔한 2단 나뭇잎
+  ctx.fillStyle = '#2ECC71';
   ctx.beginPath();
-  ctx.arc(x, y - 8, 19, 0, Math.PI * 2);
-  ctx.arc(x - 11, y - 16, 15, 0, Math.PI * 2);
-  ctx.arc(x + 11, y - 16, 15, 0, Math.PI * 2);
+  ctx.arc(x, y - 8, 17, 0, Math.PI * 2);
+  ctx.arc(x - 8, y - 14, 12, 0, Math.PI * 2);
+  ctx.arc(x + 8, y - 14, 12, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
 
-  ctx.fillStyle = '#1DD1A1'; // 쨍하고 산뜻한 비비드 에메랄드
+  // 상단 은은한 포인트 잎
+  ctx.fillStyle = '#58D68D';
   ctx.beginPath();
-  ctx.arc(x, y - 10, 16, 0, Math.PI * 2);
-  ctx.arc(x - 9, y - 17, 13, 0, Math.PI * 2);
-  ctx.arc(x + 9, y - 17, 13, 0, Math.PI * 2);
+  ctx.arc(x, y - 12, 11, 0, Math.PI * 2);
   ctx.fill();
-
-  // 상단 하이라이트 잎
-  ctx.fillStyle = '#55E6C1';
-  ctx.beginPath();
-  ctx.arc(x - 2, y - 17, 10, 0, Math.PI * 2);
-  ctx.arc(x + 5, y - 20, 8, 0, Math.PI * 2);
-  ctx.fill();
-
-  // 쨍한 빨간 사과 포인트
-  ctx.fillStyle = '#FF6B6B';
-  ctx.strokeStyle = OUTLINE_COLOR;
-  ctx.lineWidth = 1.5;
-
-  const apples = [
-    { ax: x - 8, ay: y - 10, r: 3.5 },
-    { ax: x + 8, ay: y - 6, r: 3.5 },
-    { ax: x + 1, ay: y - 21, r: 4 }
-  ];
-  apples.forEach(ap => {
-    ctx.beginPath();
-    ctx.arc(ap.ax, ap.ay, ap.r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = '#FFFFFF';
-    ctx.beginPath();
-    ctx.arc(ap.ax - 1, ap.ay - 1, 1, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#FF6B6B';
-  });
 
   ctx.restore();
 }
 
-// 3) 알록달록 캔디 꽃 그리기
+// 3) 심플하고 정갈한 미니멀 꽃
 function drawFlower(ctx, x, y) {
   ctx.save();
 
   // 줄기
-  ctx.strokeStyle = '#1DD1A1';
-  ctx.lineWidth = 3;
+  ctx.strokeStyle = '#2ECC71';
+  ctx.lineWidth = 2.5;
   ctx.lineCap = 'round';
   ctx.beginPath();
   ctx.moveTo(x, y);
-  ctx.lineTo(x, y + 12);
+  ctx.lineTo(x, y + 10);
   ctx.stroke();
 
-  // 꽃잎 5개 (화사한 핫핑크)
-  ctx.fillStyle = '#FF6B6B';
+  // 심플 5엽 핑크 꽃잎
+  ctx.fillStyle = '#FF7675';
   ctx.strokeStyle = OUTLINE_COLOR;
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 1.5;
 
   const petalCount = 5;
-  const radius = 5.5;
+  const radius = 5;
   for (let i = 0; i < petalCount; i++) {
     const angle = (i * 2 * Math.PI) / petalCount;
     const px = x + Math.cos(angle) * radius;
     const py = y + Math.sin(angle) * radius;
     ctx.beginPath();
-    ctx.arc(px, py, 4.5, 0, Math.PI * 2);
+    ctx.arc(px, py, 4, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
   }
 
   // 센터 노란 꽃수술
-  ctx.fillStyle = '#FECA57';
+  ctx.fillStyle = '#FDCB6E';
   ctx.beginPath();
-  ctx.arc(x, y, 4.5, 0, Math.PI * 2);
+  ctx.arc(x, y, 4, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
-
-  ctx.fillStyle = '#FFFFFF';
-  ctx.beginPath();
-  ctx.arc(x - 1.2, y - 1.2, 1.2, 0, Math.PI * 2);
-  ctx.fill();
 
   ctx.restore();
 }
 
-// 4) 알록달록 비비드 풍차 그리기
+// 4) 정갈한 미니멀 풍차
 function drawWindmill(ctx, x, y, rot) {
   ctx.save();
 
   // 지지대 그림자
-  ctx.fillStyle = 'rgba(0,0,0,0.12)';
+  ctx.fillStyle = 'rgba(0,0,0,0.1)';
   ctx.beginPath();
-  ctx.ellipse(x, y + 32, 14, 5, 0, 0, Math.PI * 2);
+  ctx.ellipse(x, y + 30, 12, 4, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // 맑고 화사한 풍차 탑
+  // 깔끔한 백색 풍차 탑
   ctx.fillStyle = '#FFFFFF';
   ctx.strokeStyle = OUTLINE_COLOR;
   ctx.lineWidth = OUTLINE_WIDTH;
   ctx.beginPath();
-  ctx.moveTo(x - 14, y + 30);
-  ctx.lineTo(x - 5, y - 10);
-  ctx.lineTo(x + 5, y - 10);
-  ctx.lineTo(x + 14, y + 30);
+  ctx.moveTo(x - 12, y + 28);
+  ctx.lineTo(x - 4, y - 8);
+  ctx.lineTo(x + 4, y - 8);
+  ctx.lineTo(x + 12, y + 28);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
 
-  // 지붕 (쨍한 레몬)
-  ctx.fillStyle = '#FECA57';
+  // 노란 민둥 지붕
+  ctx.fillStyle = '#FDCB6E';
   ctx.beginPath();
-  ctx.moveTo(x - 7, y - 10);
-  ctx.lineTo(0, y - 20);
-  ctx.lineTo(x + 7, y - 10);
+  ctx.moveTo(x - 6, y - 8);
+  ctx.lineTo(0, y - 17);
+  ctx.lineTo(x + 6, y - 8);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
 
-  // 중심축
-  ctx.fillStyle = '#54A0FF';
+  // 회전 중심
+  ctx.fillStyle = '#74B9FF';
   ctx.beginPath();
-  ctx.arc(x, y - 8, 5, 0, Math.PI * 2);
+  ctx.arc(x, y - 7, 4.5, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
 
-  // 회전하는 4색 비비드 날개
+  // 회전하는 4색 깔끔한 날개
   ctx.save();
-  ctx.translate(x, y - 8);
+  ctx.translate(x, y - 7);
   ctx.rotate(rot);
 
-  const bladeColors = ['#FF6B6B', '#1DD1A1', '#54A0FF', '#FECA57'];
+  const bladeColors = ['#FF7675', '#2ECC71', '#0984E3', '#FDCB6E'];
   for (let i = 0; i < 4; i++) {
     ctx.rotate(Math.PI / 2);
     ctx.fillStyle = bladeColors[i];
     ctx.strokeStyle = OUTLINE_COLOR;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.roundRect(-3.5, 0, 7, 28, 3.5);
+    ctx.roundRect(-3, 0, 6, 26, 3);
     ctx.fill();
     ctx.stroke();
-
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(-2, 8, 4, 12);
   }
   ctx.restore();
 
   ctx.restore();
 }
 
-// 5) 플레이어 자동차 그리기 (밝고 쨍한 비비드 토이 레이서)
+// 5) 플레이어 자동차 (담백하고 군더더기 없는 미니멀 레이서)
 function drawPlayer() {
   if (invincibleTime > 0 && Math.floor(invincibleTime / 4) % 2 === 0) {
     return;
@@ -237,156 +192,108 @@ function drawPlayer() {
   ctx.translate(car.x, car.y);
   ctx.rotate(car.angle);
 
-  // 1. 차량 투명 그림자
-  if (boosterTime > 0) {
-    ctx.shadowColor = '#48DBFB';
-    ctx.shadowBlur = 16;
-    ctx.fillStyle = 'rgba(72, 219, 251, 0.5)';
-  } else {
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
-  }
+  // 1. 차체 얇은 그림자
+  ctx.fillStyle = boosterTime > 0 ? 'rgba(0, 206, 201, 0.3)' : 'rgba(0, 0, 0, 0.16)';
   ctx.beginPath();
-  ctx.roundRect(-car.width / 2 - 2, -car.height / 2 + 6, car.width + 4, car.height + 2, 11);
+  ctx.roundRect(-car.width / 2 - 1, -car.height / 2 + 5, car.width + 2, car.height + 2, 10);
   ctx.fill();
-  ctx.shadowBlur = 0;
 
-  // 2. 부스터 모드 화려한 무지개 불꽃 파티클
-  if (boosterTime > 0) {
-    ctx.save();
-    const flameH = 16 + Math.random() * 10;
-    const flameGrad = ctx.createLinearGradient(0, car.height / 2, 0, car.height / 2 + flameH);
-    flameGrad.addColorStop(0, '#48DBFB');
-    flameGrad.addColorStop(0.5, '#FF6B6B');
-    flameGrad.addColorStop(1, 'rgba(254, 202, 87, 0)');
-
-    ctx.fillStyle = flameGrad;
-    ctx.beginPath();
-    ctx.moveTo(-car.width / 4, car.height / 2);
-    ctx.lineTo(0, car.height / 2 + flameH);
-    ctx.lineTo(car.width / 4, car.height / 2);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-  }
-
-  // 3. 앙증맞은 장난감 타이어
+  // 2. 바퀴 (심플 4개 타이어)
   const drawToyWheel = (wx, wy) => {
     ctx.save();
     ctx.translate(wx, wy);
 
     ctx.fillStyle = OUTLINE_COLOR;
     ctx.beginPath();
-    ctx.roundRect(-3, -7, 6, 14, 3);
+    ctx.roundRect(-2.5, -6, 5, 12, 2.5);
     ctx.fill();
 
-    const rot = Math.sin(car.wheelRotation) * 3;
-    ctx.fillStyle = boosterTime > 0 ? '#FECA57' : '#FFFFFF';
-    ctx.fillRect(-2, rot - 2, 4, 4);
+    const rot = Math.sin(car.wheelRotation) * 2;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(-1.5, rot - 1.5, 3, 3);
 
     ctx.restore();
   };
 
-  drawToyWheel(-car.width / 2 - 2, -car.height / 2 + 11);
-  drawToyWheel(car.width / 2 + 2, -car.height / 2 + 11);
-  drawToyWheel(-car.width / 2 - 2, car.height / 2 - 13);
-  drawToyWheel(car.width / 2 + 2, car.height / 2 - 13);
+  drawToyWheel(-car.width / 2 - 2, -car.height / 2 + 10);
+  drawToyWheel(car.width / 2 + 2, -car.height / 2 + 10);
+  drawToyWheel(-car.width / 2 - 2, car.height / 2 - 12);
+  drawToyWheel(car.width / 2 + 2, car.height / 2 - 12);
 
-  // 4. 메인 차체 (맑고 쨍한 파스텔 & 팝 컬러)
+  // 3. 메인 차체 (군더더기 없는 산뜻 플랫 바디)
   const skin = getSelectedCar();
-  const mainColor = boosterTime > 0 ? '#48DBFB' : carBodyColor();
+  const mainColor = boosterTime > 0 ? '#00CEC9' : carBodyColor();
 
   ctx.fillStyle = mainColor;
   ctx.strokeStyle = OUTLINE_COLOR;
   ctx.lineWidth = OUTLINE_WIDTH;
   ctx.beginPath();
-  ctx.roundRect(-car.width / 2, -car.height / 2, car.width, car.height, 12);
+  ctx.roundRect(-car.width / 2, -car.height / 2, car.width, car.height, 10);
   ctx.fill();
   ctx.stroke();
 
-  // 상단 반짝임 하이라이트 (투명 맑은 백색)
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+  // 깔끔한 윈드실드 유리창
+  ctx.fillStyle = '#74B9FF';
   ctx.beginPath();
-  ctx.roundRect(-car.width / 2 + 3, -car.height / 2 + 3, car.width / 3, car.height - 6, 6);
-  ctx.fill();
-
-  // 중앙 흰 레이싱 데칼 스트라이프
-  ctx.fillStyle = boosterTime > 0 ? '#FFFFFF' : (skin.stripe || '#FFFFFF');
-  ctx.fillRect(-4, -car.height / 2 + 4, 8, car.height - 8);
-
-  // 5. 맑은 하늘색 윈드실드 유리창
-  ctx.fillStyle = '#C8D6E5';
-  ctx.strokeStyle = OUTLINE_COLOR;
-  ctx.lineWidth = 2;
-
-  // 전면 유리
-  ctx.fillStyle = '#48DBFB';
-  ctx.beginPath();
-  ctx.roundRect(-car.width / 2 + 4, -car.height / 4, car.width - 8, 14, 5);
+  ctx.roundRect(-car.width / 2 + 4, -car.height / 4, car.width - 8, 13, 4);
   ctx.fill();
   ctx.stroke();
 
-  // 유리창 반사광
+  // 유리창 심플 반사선
   ctx.fillStyle = '#FFFFFF';
   ctx.beginPath();
   ctx.moveTo(-car.width / 2 + 7, -car.height / 4 + 3);
   ctx.lineTo(-car.width / 2 + 12, -car.height / 4 + 3);
-  ctx.lineTo(-car.width / 2 + 7, -car.height / 4 + 11);
+  ctx.lineTo(-car.width / 2 + 7, -car.height / 4 + 10);
   ctx.closePath();
   ctx.fill();
 
   // 후면 유리창
-  ctx.fillStyle = '#48DBFB';
+  ctx.fillStyle = '#74B9FF';
   ctx.beginPath();
-  ctx.roundRect(-car.width / 2 + 5, car.height / 4 - 2, car.width - 10, 8, 3.5);
+  ctx.roundRect(-car.width / 2 + 5, car.height / 4 - 2, car.width - 10, 7, 3);
   ctx.fill();
   ctx.stroke();
 
-  // 6. 반짝이는 백색/황금 헤드라이트
-  ctx.fillStyle = boosterTime > 0 ? '#FECA57' : '#FFFFFF';
+  // 4. 헤드라이트 (둥근 노란 2개)
+  ctx.fillStyle = '#FFEAA7';
   ctx.strokeStyle = OUTLINE_COLOR;
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.arc(-car.width / 3, -car.height / 2 + 2, 4.5, 0, Math.PI * 2);
-  ctx.arc(car.width / 3, -car.height / 2 + 2, 4.5, 0, Math.PI * 2);
+  ctx.arc(-car.width / 3, -car.height / 2 + 2, 4, 0, Math.PI * 2);
+  ctx.arc(car.width / 3, -car.height / 2 + 2, 4, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
 
-  // 7. 쨍한 리어 스포일러
-  ctx.fillStyle = boosterTime > 0 ? '#FF6B6B' : (skin.spoiler || '#FF4757');
+  // 5. 스포일러 (심플 미니 날개)
+  ctx.fillStyle = boosterTime > 0 ? '#FF7675' : (skin.spoiler || '#FF7675');
   ctx.beginPath();
-  ctx.roundRect(-car.width / 2 - 3, car.height / 2 - 4, car.width + 6, 6, 3);
+  ctx.roundRect(-car.width / 2 - 2, car.height / 2 - 4, car.width + 4, 5, 2.5);
   ctx.fill();
   ctx.stroke();
 
-  // --- [액티브 시각효과: 에메랄드 쉴드] ---
+  // --- [액티브 효과: 쉴드] ---
   if (activeShield) {
     ctx.save();
-    const pulseScale = 1.25 + Math.sin(Date.now() / 90) * 0.04;
-    ctx.strokeStyle = '#1DD1A1';
-    ctx.lineWidth = 3.5;
-    ctx.shadowColor = '#55E6C1';
-    ctx.shadowBlur = 14;
-
+    ctx.strokeStyle = '#00CEC9';
+    ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.arc(0, 0, car.height * 0.62 * pulseScale, 0, Math.PI * 2);
+    ctx.arc(0, 0, car.height * 0.64, 0, Math.PI * 2);
     ctx.stroke();
 
-    ctx.fillStyle = 'rgba(85, 230, 193, 0.2)';
+    ctx.fillStyle = 'rgba(0, 206, 201, 0.12)';
     ctx.fill();
     ctx.restore();
   }
 
-  // --- [액티브 시각효과: 자석 파장] ---
+  // --- [액티브 효과: 자석] ---
   if (magnetTime > 0) {
     ctx.save();
-    ctx.strokeStyle = 'rgba(255, 107, 107, 0.8)';
-    ctx.lineWidth = 2.5;
-    ctx.setLineDash([5, 5]);
-    ctx.lineDashOffset = -Date.now() / 40;
-    const magScale = 1.35 + Math.sin(Date.now() / 110) * 0.05;
-
+    ctx.strokeStyle = 'rgba(255, 118, 117, 0.75)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 4]);
     ctx.beginPath();
-    ctx.arc(0, 0, 105 * magScale, 0, Math.PI * 2);
+    ctx.arc(0, 0, 105, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
   }
@@ -394,36 +301,36 @@ function drawPlayer() {
   ctx.restore();
 }
 
-// 6) 쨍한 오렌지 트래픽 고깔 콘 (위험 경고)
+// 6) 주황 트래픽 콘 (담백한 삼각 콘)
 function drawCone(ctx, x, y, w, h) {
   ctx.save();
   ctx.translate(x, y);
 
   // 그림자
-  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  ctx.fillStyle = 'rgba(0,0,0,0.12)';
   ctx.beginPath();
-  ctx.ellipse(0, h / 2 + 1, w * 0.65, 3.5, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, h / 2 + 1, w * 0.6, 3, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // 고무 받침
+  // 받침
   ctx.fillStyle = OUTLINE_COLOR;
   ctx.beginPath();
-  ctx.roundRect(-w / 2 - 2, h / 2 - 5, w + 4, 6, 2);
+  ctx.roundRect(-w / 2 - 1, h / 2 - 5, w + 2, 5, 2);
   ctx.fill();
 
-  // 쨍한 당근 오렌지 삼각 콘
-  ctx.fillStyle = '#FF9F43';
+  // 오렌지 콘
+  ctx.fillStyle = '#FF7675';
   ctx.beginPath();
   ctx.moveTo(0, -h / 2);
-  ctx.lineTo(-w / 2.3, h / 2 - 6);
-  ctx.lineTo(w / 2.3, h / 2 - 6);
+  ctx.lineTo(-w / 2.3, h / 2 - 5);
+  ctx.lineTo(w / 2.3, h / 2 - 5);
   ctx.closePath();
   ctx.fill();
   ctx.strokeStyle = OUTLINE_COLOR;
   ctx.lineWidth = OUTLINE_WIDTH;
   ctx.stroke();
 
-  // 선명한 순백 띠 2개
+  // 흰 띠 2개
   ctx.fillStyle = '#FFFFFF';
 
   ctx.beginPath();
@@ -447,23 +354,23 @@ function drawCone(ctx, x, y, w, h) {
   ctx.restore();
 }
 
-// 7) 맑고 아기자기한 연회색 다각형 장난감 바위 (더 이상 어둡지 않음!)
+// 7) 담백하고 깔끔한 미니멀 바위
 function drawRock(ctx, x, y, w, h) {
   ctx.save();
   ctx.translate(x, y);
 
   // 그림자
-  ctx.fillStyle = 'rgba(0,0,0,0.14)';
+  ctx.fillStyle = 'rgba(0,0,0,0.12)';
   ctx.beginPath();
-  ctx.ellipse(0, h * 0.35, w * 0.58, h * 0.28, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, h * 0.35, w * 0.55, h * 0.25, 0, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.strokeStyle = OUTLINE_COLOR;
   ctx.lineWidth = OUTLINE_WIDTH;
   ctx.lineJoin = 'round';
 
-  // 1. 좌측 부드러운 회색면
-  ctx.fillStyle = '#CAD3C8';
+  // 1. 좌측 톤
+  ctx.fillStyle = '#BDC3C7';
   ctx.beginPath();
   ctx.moveTo(-w / 2, h / 4);
   ctx.lineTo(-w / 3, -h / 3);
@@ -473,8 +380,8 @@ function drawRock(ctx, x, y, w, h) {
   ctx.fill();
   ctx.stroke();
 
-  // 2. 우측 중앙 맑은 베이지 회색면
-  ctx.fillStyle = '#DFE4EA';
+  // 2. 우측 톤
+  ctx.fillStyle = '#ECF0F1';
   ctx.beginPath();
   ctx.moveTo(0, -h / 2);
   ctx.lineTo(w / 2.3, -h / 4);
@@ -485,19 +392,8 @@ function drawRock(ctx, x, y, w, h) {
   ctx.fill();
   ctx.stroke();
 
-  // 3. 상단 순백 하이라이트 면
-  ctx.fillStyle = '#FFFFFF';
-  ctx.beginPath();
-  ctx.moveTo(-w / 3, -h / 3);
-  ctx.lineTo(0, -h / 2);
-  ctx.lineTo(w / 2.3, -h / 4);
-  ctx.lineTo(0, -h / 6);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-
-  // 4. 하단 받침 면
-  ctx.fillStyle = '#B2BEC3';
+  // 3. 하단 톤
+  ctx.fillStyle = '#95A5A6';
   ctx.beginPath();
   ctx.moveTo(-w / 2, h / 4);
   ctx.lineTo(-w / 7, h / 6);
@@ -510,90 +406,66 @@ function drawRock(ctx, x, y, w, h) {
   ctx.restore();
 }
 
-// 8) 쨍한 바나나 옐로우 공사중 바리케이드
+// 8) 공사중 안전 바리케이드 (담백한 미니멀 빗금)
 function drawBarrier(ctx, x, y, w, h) {
   ctx.save();
   ctx.translate(x, y);
 
   // 다리
-  ctx.fillStyle = '#54A0FF';
+  ctx.fillStyle = '#747D8C';
   ctx.strokeStyle = OUTLINE_COLOR;
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 1.8;
 
-  ctx.fillRect(-w / 2 + 2, -h / 2, 6, h);
-  ctx.strokeRect(-w / 2 + 2, -h / 2, 6, h);
+  ctx.fillRect(-w / 2 + 2, -h / 2, 5, h);
+  ctx.strokeRect(-w / 2 + 2, -h / 2, 5, h);
 
-  ctx.fillRect(w / 2 - 8, -h / 2, 6, h);
-  ctx.strokeRect(w / 2 - 8, -h / 2, 6, h);
+  ctx.fillRect(w / 2 - 7, -h / 2, 5, h);
+  ctx.strokeRect(w / 2 - 7, -h / 2, 5, h);
 
-  // 쨍한 레몬 옐로우 보드
-  ctx.fillStyle = '#FECA57';
+  // 노란 보드
+  ctx.fillStyle = '#FFEAA7';
   ctx.beginPath();
-  ctx.roundRect(-w / 2, -h / 3, w, h * 0.62, 5);
+  ctx.roundRect(-w / 2, -h / 3, w, h * 0.6, 4);
   ctx.fill();
   ctx.stroke();
 
   // 빗금
   ctx.fillStyle = OUTLINE_COLOR;
-  for (let offset = -w / 2 + 8; offset < w / 2; offset += 20) {
+  for (let offset = -w / 2 + 8; offset < w / 2; offset += 18) {
     ctx.beginPath();
     ctx.moveTo(offset, -h / 3);
-    ctx.lineTo(offset + 9, -h / 3);
-    ctx.lineTo(offset - 3, h / 3 - 4);
-    ctx.lineTo(offset - 12, h / 3 - 4);
+    ctx.lineTo(offset + 8, -h / 3);
+    ctx.lineTo(offset - 2, h / 3 - 4);
+    ctx.lineTo(offset - 10, h / 3 - 4);
     ctx.closePath();
     ctx.fill();
   }
 
-  // 상단 쨍한 붉은 램프
-  const drawLamp = (lx) => {
-    ctx.fillStyle = '#FF6B6B';
-    ctx.strokeStyle = OUTLINE_COLOR;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(lx, -h / 3 - 4, 4.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = '#FFFFFF';
-    ctx.beginPath();
-    ctx.arc(lx - 1, -h / 3 - 5, 1.2, 0, Math.PI * 2);
-    ctx.fill();
-  };
-
-  drawLamp(-w / 3);
-  drawLamp(w / 3);
-
   ctx.restore();
 }
 
-// 9) 쨍한 비비드 캔디 오렌지 오일 드럼통
+// 9) 미니멀 오렌지 드럼통
 function drawOilDrum(ctx, x, y, w, h) {
   ctx.save();
   ctx.translate(x, y);
 
   // 그림자
-  ctx.fillStyle = 'rgba(0,0,0,0.14)';
+  ctx.fillStyle = 'rgba(0,0,0,0.12)';
   ctx.beginPath();
-  ctx.ellipse(0, h / 2 + 1, w * 0.55, 3.5, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, h / 2 + 1, w * 0.5, 3, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // 쨍한 코랄 레드 드럼통
-  ctx.fillStyle = '#FF6B6B';
+  // 드럼통 바디
+  ctx.fillStyle = '#FF7675';
   ctx.strokeStyle = OUTLINE_COLOR;
   ctx.lineWidth = OUTLINE_WIDTH;
 
   ctx.beginPath();
-  ctx.roundRect(-w / 2, -h / 2, w, h, 6);
+  ctx.roundRect(-w / 2, -h / 2, w, h, 5);
   ctx.fill();
   ctx.stroke();
 
-  // 상단 하이라이트 띠
-  ctx.fillStyle = '#FF8E8E';
-  ctx.fillRect(-w / 2 + 2, -h / 2 + 3, w / 3, h - 6);
-
-  // 리벳 띠선
-  ctx.strokeStyle = OUTLINE_COLOR;
+  // 띠선
   ctx.beginPath();
   ctx.moveTo(-w / 2, -h / 6);
   ctx.lineTo(w / 2, -h / 6);
@@ -601,119 +473,100 @@ function drawOilDrum(ctx, x, y, w, h) {
   ctx.lineTo(w / 2, h / 6);
   ctx.stroke();
 
-  // 경고 오일 방울 마크
-  ctx.fillStyle = '#FECA57';
-  ctx.strokeStyle = OUTLINE_COLOR;
-  ctx.lineWidth = 1.5;
+  // 경고 포인트
+  ctx.fillStyle = '#FFEAA7';
   ctx.beginPath();
-  ctx.arc(0, 2, 4.5, 0, Math.PI * 2);
+  ctx.arc(0, 0, 4, 0, Math.PI * 2);
   ctx.fill();
-  ctx.stroke();
 
   ctx.restore();
 }
 
-// 10) 맑은 아쿠아 스카이 물웅덩이 (미끄러짐 함정)
+// 10) 맑은 미니멀 물웅덩이
 function drawPuddle(ctx, x, y, w, h) {
   ctx.save();
   ctx.translate(x, y);
 
-  // 반투명 맑은 스카이블루
-  ctx.fillStyle = 'rgba(72, 219, 251, 0.65)';
+  ctx.fillStyle = 'rgba(116, 185, 255, 0.55)';
   ctx.beginPath();
   ctx.ellipse(0, 0, w / 2, h / 2, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.strokeStyle = '#48DBFB';
-  ctx.lineWidth = 2.5;
-  ctx.stroke();
-
-  // 찰랑이는 순백 물결 하이라이트
-  ctx.strokeStyle = '#FFFFFF';
+  ctx.strokeStyle = '#74B9FF';
   ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.ellipse(-w * 0.14, -h * 0.14, w * 0.24, h * 0.18, 0, Math.PI * 0.8, Math.PI * 1.9);
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.ellipse(w * 0.18, h * 0.12, w * 0.15, h * 0.12, 0, Math.PI * 0.8, Math.PI * 1.9);
   ctx.stroke();
 
   ctx.restore();
 }
 
-// 11) 마주 오는 교통차 (쨍한 비비드 퍼플 팝 토이 세단)
+// 11) 마주 오는 교통차 (담백한 퍼플 미니카)
 function drawTrafficCar(ctx, x, y, w, h) {
   ctx.save();
   ctx.translate(x, y);
 
   // 그림자
-  ctx.fillStyle = 'rgba(0,0,0,0.18)';
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
   ctx.beginPath();
-  ctx.roundRect(-w / 2 - 2, -h / 2 + 6, w + 4, h, 10);
+  ctx.roundRect(-w / 2 - 1, -h / 2 + 5, w + 2, h, 9);
   ctx.fill();
 
-  // 검은 타이어
+  // 타이어
   ctx.fillStyle = OUTLINE_COLOR;
-  ctx.fillRect(-w / 2 - 3, -h / 2 + 9, 5, 12);
-  ctx.fillRect(w / 2 - 2, -h / 2 + 9, 5, 12);
-  ctx.fillRect(-w / 2 - 3, h / 2 - 21, 5, 12);
-  ctx.fillRect(w / 2 - 2, h / 2 - 21, 5, 12);
+  ctx.fillRect(-w / 2 - 3, -h / 2 + 8, 5, 11);
+  ctx.fillRect(w / 2 - 2, -h / 2 + 8, 5, 11);
+  ctx.fillRect(-w / 2 - 3, h / 2 - 19, 5, 11);
+  ctx.fillRect(w / 2 - 2, h / 2 - 19, 5, 11);
 
-  // 쨍한 퍼플 바디
-  ctx.fillStyle = '#9C88FF';
+  // 퍼플 차체
+  ctx.fillStyle = '#A29BFE';
   ctx.strokeStyle = OUTLINE_COLOR;
   ctx.lineWidth = OUTLINE_WIDTH;
   ctx.beginPath();
-  ctx.roundRect(-w / 2, -h / 2, w, h, 11);
+  ctx.roundRect(-w / 2, -h / 2, w, h, 10);
   ctx.fill();
   ctx.stroke();
 
-  // 하이라이트
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
-  ctx.fillRect(-w / 2 + 3, -h / 2 + 3, w / 4, h - 6);
-
-  // 맑은 하늘색 윈드실드
-  ctx.fillStyle = '#48DBFB';
-  ctx.lineWidth = 2;
+  // 윈드실드
+  ctx.fillStyle = '#74B9FF';
+  ctx.lineWidth = 1.8;
 
   ctx.beginPath();
-  ctx.roundRect(-w / 2 + 4, h / 8, w - 8, 13, 4);
+  ctx.roundRect(-w / 2 + 4, h / 8, w - 8, 12, 3.5);
   ctx.fill();
   ctx.stroke();
 
   ctx.beginPath();
-  ctx.roundRect(-w / 2 + 5, -h / 3, w - 10, 8, 3.5);
+  ctx.roundRect(-w / 2 + 5, -h / 3, w - 10, 7, 3);
   ctx.fill();
   ctx.stroke();
 
-  // 마주보는 쨍한 노란 헤드라이트
-  ctx.fillStyle = '#FECA57';
+  // 헤드라이트
+  ctx.fillStyle = '#FFEAA7';
   ctx.strokeStyle = OUTLINE_COLOR;
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.arc(-w / 3.2, h / 2 - 1, 4, 0, Math.PI * 2);
-  ctx.arc(w / 3.2, h / 2 - 1, 4, 0, Math.PI * 2);
+  ctx.arc(-w / 3.2, h / 2 - 1, 3.5, 0, Math.PI * 2);
+  ctx.arc(w / 3.2, h / 2 - 1, 3.5, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
 
   ctx.restore();
 }
 
-// 12) 길 건너는 보행자 & 동물 (아기자기하고 화사함)
+// 12) 길 건너는 보행자 & 동물 (치면 안 되는 캐릭터)
 function drawCrosser(ctx, obs) {
   const w = obs.width;
   const h = obs.height;
   const dir = obs.vx >= 0 ? 1 : -1;
-  const swing = Math.sin(obs.step) * 3.2;
+  const swing = Math.sin(obs.step) * 3;
 
   ctx.save();
   ctx.translate(obs.x, obs.y);
 
-  // 접지 그림자
-  ctx.fillStyle = 'rgba(0,0,0,0.12)';
+  // 그림자
+  ctx.fillStyle = 'rgba(0,0,0,0.1)';
   ctx.beginPath();
-  ctx.ellipse(0, h / 2 + 2.5, w / 2 - 3, 2, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, h / 2 + 2, w / 2 - 3, 2, 0, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.lineJoin = 'round';
@@ -725,70 +578,66 @@ function drawCrosser(ctx, obs) {
     drawWalkerBody(ctx, w, h, dir, swing, obs.tone);
   }
 
-  // 머리 위 쨍한 옐로우 경고 방울
-  ctx.fillStyle = '#FECA57';
+  // 머리 위 경고 아이콘 (노란 원 + !)
+  ctx.fillStyle = '#FFEAA7';
   ctx.strokeStyle = OUTLINE_COLOR;
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 1.8;
   ctx.beginPath();
-  ctx.arc(0, -h / 2 - 11, 8.5, 0, Math.PI * 2);
+  ctx.arc(0, -h / 2 - 10, 8, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
 
-  ctx.fillStyle = '#FF6B6B';
+  ctx.fillStyle = '#FF7675';
   ctx.beginPath();
-  ctx.roundRect(-1.5, -h / 2 - 16, 3, 6, 1.5);
-  ctx.arc(0, -h / 2 - 7.5, 1.6, 0, Math.PI * 2);
+  ctx.roundRect(-1.5, -h / 2 - 14.5, 3, 5.5, 1.2);
+  ctx.arc(0, -h / 2 - 7, 1.5, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.restore();
 }
 
-// 보행자: 파스텔 레고 인형
+// 보행자: 미니멀 피규어
 function drawWalkerBody(ctx, w, h, dir, swing, tone) {
-  const headR = 7.5;
+  const headR = 7;
   const headY = -h / 2 + headR + 1;
   const bodyTop = headY + headR - 1;
   const bodyH = h / 2 + 1;
 
-  // 뒤쪽 다리
+  // 다리
   ctx.strokeStyle = OUTLINE_COLOR;
-  ctx.lineWidth = 3.5;
+  ctx.lineWidth = 3;
   ctx.beginPath();
   ctx.moveTo(-2, bodyTop + bodyH - 3);
   ctx.lineTo(-2 - swing, h / 2 - 1);
+  ctx.moveTo(3, bodyTop + bodyH - 3);
+  ctx.lineTo(3 + swing, h / 2 - 1);
   ctx.stroke();
 
-  // 쨍한 파스텔 셔츠
-  ctx.fillStyle = tone || '#54A0FF';
+  // 신발
+  ctx.fillStyle = '#0984E3';
+  ctx.beginPath();
+  ctx.ellipse(3 + swing + dir * 1, h / 2, 2.5, 1.5, 0, 0, Math.PI * 2);
+  ctx.ellipse(-2 - swing + dir * 1, h / 2, 2.5, 1.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 몸통
+  ctx.fillStyle = tone || '#74B9FF';
   ctx.strokeStyle = OUTLINE_COLOR;
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.roundRect(-w / 2 + 3, bodyTop, w - 6, bodyH, 5);
+  ctx.roundRect(-w / 2 + 3, bodyTop, w - 6, bodyH, 4);
   ctx.fill();
   ctx.stroke();
 
   // 팔
   ctx.strokeStyle = OUTLINE_COLOR;
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 2.5;
   ctx.beginPath();
   ctx.moveTo(dir * (w / 2 - 4), bodyTop + 4);
-  ctx.lineTo(dir * (w / 2 - 4) + swing * 0.8, bodyTop + 12);
+  ctx.lineTo(dir * (w / 2 - 4) + swing * 0.7, bodyTop + 11);
   ctx.stroke();
 
-  // 앞쪽 다리
-  ctx.lineWidth = 3.5;
-  ctx.beginPath();
-  ctx.moveTo(3, bodyTop + bodyH - 3);
-  ctx.lineTo(3 + swing, h / 2 - 1);
-  ctx.stroke();
-
-  ctx.fillStyle = '#54A0FF';
-  ctx.beginPath();
-  ctx.ellipse(3 + swing + dir * 1.2, h / 2, 2.8, 1.8, 0, 0, Math.PI * 2);
-  ctx.ellipse(-2 - swing + dir * 1.2, h / 2, 2.8, 1.8, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // 뽀얀 얼굴
+  // 얼굴
   ctx.fillStyle = '#FFEAA7';
   ctx.strokeStyle = OUTLINE_COLOR;
   ctx.lineWidth = 2;
@@ -797,8 +646,8 @@ function drawWalkerBody(ctx, w, h, dir, swing, tone) {
   ctx.fill();
   ctx.stroke();
 
-  // 갈색 머리
-  ctx.fillStyle = '#8395A7';
+  // 머리
+  ctx.fillStyle = '#6C5CE7';
   ctx.beginPath();
   ctx.arc(0, headY, headR, Math.PI * 1.05, Math.PI * 2.05);
   ctx.fill();
@@ -806,34 +655,31 @@ function drawWalkerBody(ctx, w, h, dir, swing, tone) {
   // 눈
   ctx.fillStyle = OUTLINE_COLOR;
   ctx.beginPath();
-  ctx.arc(dir * 2.6, headY + 1.5, 1.5, 0, Math.PI * 2);
+  ctx.arc(dir * 2.5, headY + 1, 1.3, 0, Math.PI * 2);
   ctx.fill();
 }
 
-// 동물: 앙증맞은 노란 아기 곰/강아지
+// 동물: 미니멀 노란 강아지
 function drawCritterBody(ctx, w, h, dir, swing, tone) {
-  const fur = tone || '#FECA57';
+  const fur = tone || '#FFEAA7';
   const headX = dir * (w / 2 - 6);
 
   // 꼬리
   ctx.strokeStyle = OUTLINE_COLOR;
-  ctx.lineWidth = 2.2;
+  ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(-dir * (w / 2 - 5), -1);
-  ctx.quadraticCurveTo(
-    -dir * (w / 2 + 1), -4 + swing * 0.6,
-    -dir * (w / 2 - 1), -10 + swing * 0.6
-  );
+  ctx.moveTo(-dir * (w / 2 - 4), -1);
+  ctx.lineTo(-dir * (w / 2), -7 + swing * 0.5);
   ctx.stroke();
 
   // 다리
-  ctx.lineWidth = 2.8;
+  ctx.lineWidth = 2.5;
   ctx.beginPath();
-  ctx.moveTo(-4, h / 2 - 7); ctx.lineTo(-4 - swing * 0.5, h / 2 - 1);
-  ctx.moveTo(4, h / 2 - 7);  ctx.lineTo(4 + swing * 0.5, h / 2 - 1);
+  ctx.moveTo(-4, h / 2 - 6); ctx.lineTo(-4 - swing * 0.5, h / 2 - 1);
+  ctx.moveTo(4, h / 2 - 6);  ctx.lineTo(4 + swing * 0.5, h / 2 - 1);
   ctx.stroke();
 
-  // 통통 털 몸통
+  // 몸통
   ctx.fillStyle = fur;
   ctx.strokeStyle = OUTLINE_COLOR;
   ctx.lineWidth = 2;
@@ -844,23 +690,23 @@ function drawCritterBody(ctx, w, h, dir, swing, tone) {
 
   // 머리
   ctx.beginPath();
-  ctx.arc(headX, -2, 7, 0, Math.PI * 2);
+  ctx.arc(headX, -2, 6.5, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
 
   // 귀 2개
   ctx.beginPath();
-  ctx.moveTo(headX - 4.5, -7);
-  ctx.lineTo(headX - 5.5, -14);
-  ctx.lineTo(headX - 0.5, -8.5);
+  ctx.moveTo(headX - 4, -6);
+  ctx.lineTo(headX - 5, -12);
+  ctx.lineTo(headX - 0.5, -7.5);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
 
   ctx.beginPath();
-  ctx.moveTo(headX + 4.5, -7);
-  ctx.lineTo(headX + 5.5, -14);
-  ctx.lineTo(headX + 0.5, -8.5);
+  ctx.moveTo(headX + 4, -6);
+  ctx.lineTo(headX + 5, -12);
+  ctx.lineTo(headX + 0.5, -7.5);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
@@ -868,10 +714,10 @@ function drawCritterBody(ctx, w, h, dir, swing, tone) {
   // 눈 코
   ctx.fillStyle = OUTLINE_COLOR;
   ctx.beginPath();
-  ctx.arc(headX + dir * 1.5, -3.5, 1.6, 0, Math.PI * 2);
+  ctx.arc(headX + dir * 1.5, -3, 1.4, 0, Math.PI * 2);
   ctx.fill();
   ctx.beginPath();
-  ctx.arc(headX + dir * 5.5, 0, 1.8, 0, Math.PI * 2);
+  ctx.arc(headX + dir * 5, 0, 1.6, 0, Math.PI * 2);
   ctx.fill();
 }
 
@@ -885,137 +731,116 @@ function drawChaser(ctx, c) {
   ctx.translate(c.x, c.y);
 
   if (c.stun > 0) {
-    ctx.rotate(Math.sin(Date.now() / 45) * 0.14);
+    ctx.rotate(Math.sin(Date.now() / 45) * 0.12);
   }
 
   // 그림자
-  ctx.fillStyle = 'rgba(0,0,0,0.2)';
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';
   ctx.beginPath();
-  ctx.roundRect(-w / 2 - 2, -h / 2 + 6, w + 4, h, 11);
+  ctx.roundRect(-w / 2 - 1, -h / 2 + 5, w + 2, h, 10);
   ctx.fill();
 
   ctx.strokeStyle = OUTLINE_COLOR;
   ctx.lineWidth = OUTLINE_WIDTH;
 
-  // 맑은 순백 패트롤카
+  // 백색 바디
   ctx.fillStyle = '#FFFFFF';
   ctx.beginPath();
-  ctx.roundRect(-w / 2, -h / 2, w, h, 11);
+  ctx.roundRect(-w / 2, -h / 2, w, h, 10);
   ctx.fill();
   ctx.stroke();
 
-  // 중앙 흑색 도어 패널
+  // 흑색 사이드 패널
   ctx.fillStyle = OUTLINE_COLOR;
   ctx.beginPath();
-  ctx.roundRect(-w / 2, -h / 6, w, h / 3, 3);
+  ctx.roundRect(-w / 2, -h / 6, w, h / 3, 2);
   ctx.fill();
 
-  // 맑은 민트 윈드실드
-  ctx.fillStyle = '#55E6C1';
+  // 윈드실드
+  ctx.fillStyle = '#81ECEC';
   ctx.beginPath();
-  ctx.roundRect(-w / 2 + 5, h / 5, w - 10, 13, 4);
+  ctx.roundRect(-w / 2 + 5, h / 5, w - 10, 12, 3.5);
   ctx.fill();
   ctx.stroke();
 
-  // 쨍한 경광등 (레드 / 블루)
-  const beacon = blink ? '#FF6B6B' : '#54A0FF';
+  // 경광등
+  const beacon = blink ? '#FF7675' : '#74B9FF';
   ctx.fillStyle = beacon;
   ctx.beginPath();
-  ctx.roundRect(-11, -h / 2 - 6, 22, 9, 4.5);
+  ctx.roundRect(-10, -h / 2 - 5, 20, 8, 3.5);
   ctx.fill();
   ctx.stroke();
-
-  // 경광등 빛무리
-  ctx.globalAlpha = 0.35;
-  ctx.fillStyle = beacon;
-  ctx.beginPath();
-  ctx.arc(blink ? -8 : 8, -h / 2 - 2, 19, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.globalAlpha = 1.0;
 
   // 헤드라이트
-  ctx.fillStyle = '#FECA57';
+  ctx.fillStyle = '#FFEAA7';
   ctx.beginPath();
-  ctx.arc(-w / 3.2, h / 2 - 2, 4, 0, Math.PI * 2);
-  ctx.arc(w / 3.2, h / 2 - 2, 4, 0, Math.PI * 2);
+  ctx.arc(-w / 3.2, h / 2 - 2, 3.5, 0, Math.PI * 2);
+  ctx.arc(w / 3.2, h / 2 - 2, 3.5, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
 
   ctx.restore();
 }
 
-// --- [먹어야 하는 아이템 6종 (쨍하고 반짝이는 캔디 팝 컬러)] ---
+// --- [먹어야 하는 아이템 6종 (담백하고 직관적인 플랫 디자인)] ---
 
-// 1) 쨍한 황금 코인 (Coin)
+// 1) 황금 코인
 function drawCoinItem(ctx, x, y, size, risky) {
   ctx.save();
   ctx.translate(x, y);
 
-  const pulse = Math.sin(Date.now() / 110) * 1.5;
-  const radius = size / 2 + pulse;
+  const radius = size / 2;
 
   if (risky) {
-    ctx.strokeStyle = '#FF6B6B';
-    ctx.lineWidth = 2.5;
-    ctx.setLineDash([4, 4]);
-    ctx.lineDashOffset = -Date.now() / 50;
+    ctx.strokeStyle = '#FF7675';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([3, 3]);
     ctx.beginPath();
-    ctx.arc(0, 0, radius + 7.5, 0, Math.PI * 2);
+    ctx.arc(0, 0, radius + 6, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
   }
 
-  // 쨍한 골드 바디
-  ctx.fillStyle = '#FFB8B8';
-  ctx.fillStyle = '#FFDD59';
+  // 동전 바디
+  ctx.fillStyle = '#FDCB6E';
   ctx.strokeStyle = OUTLINE_COLOR;
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 1.8;
 
   ctx.beginPath();
   ctx.arc(0, 0, radius, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
 
-  // 3D 음각 링
-  ctx.strokeStyle = '#FFA801';
-  ctx.lineWidth = 2;
+  // 내분 링
+  ctx.strokeStyle = '#E1B12C';
+  ctx.lineWidth = 1.8;
   ctx.beginPath();
   ctx.arc(0, 0, radius * 0.6, 0, Math.PI * 2);
   ctx.stroke();
 
-  // 반짝임
-  ctx.fillStyle = '#FFFFFF';
-  ctx.beginPath();
-  ctx.arc(-radius * 0.3, -radius * 0.3, 2.2, 0, Math.PI * 2);
-  ctx.fill();
-
   ctx.restore();
 }
 
-// 2) 피버 부스터 (로켓 ⚡)
+// 2) 부스터
 function drawBoosterItem(ctx, x, y, size) {
   ctx.save();
   ctx.translate(x, y);
 
-  const bounce = Math.sin(Date.now() / 90) * 3.5;
-  ctx.translate(0, bounce);
-
-  // 쨍한 파란 로켓
-  ctx.fillStyle = '#54A0FF';
+  ctx.fillStyle = '#0984E3';
   ctx.strokeStyle = OUTLINE_COLOR;
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 1.8;
   ctx.beginPath();
-  ctx.roundRect(-size / 2.5, -size / 1.8, size * 0.8, size * 1.1, 8);
+  ctx.roundRect(-size / 2.5, -size / 1.8, size * 0.8, size * 1.1, 7);
   ctx.fill();
   ctx.stroke();
 
-  // 황금 번개 ⚡
-  ctx.fillStyle = '#FECA57';
+  // 번개
+  ctx.fillStyle = '#FDCB6E';
   ctx.beginPath();
-  ctx.moveTo(-2, -8);
-  ctx.lineTo(6, -2);
+  ctx.moveTo(-2, -7);
+  ctx.lineTo(5, -2);
   ctx.lineTo(1, 0);
-  ctx.lineTo(5, 7);
+  ctx.lineTo(4, 6);
   ctx.lineTo(-4, 0);
   ctx.lineTo(1, -2);
   ctx.closePath();
@@ -1024,18 +849,14 @@ function drawBoosterItem(ctx, x, y, size) {
   ctx.restore();
 }
 
-// 3) 보호막 쉴드 🛡️
+// 3) 쉴드 🛡️
 function drawShieldItem(ctx, x, y, size) {
   ctx.save();
   ctx.translate(x, y);
 
-  const bounce = Math.sin(Date.now() / 100) * 3.5;
-  ctx.translate(0, bounce);
-
-  // 쨍한 에메랄드 방패
-  ctx.fillStyle = '#1DD1A1';
+  ctx.fillStyle = '#00CEC9';
   ctx.strokeStyle = OUTLINE_COLOR;
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 1.8;
   ctx.beginPath();
   ctx.moveTo(0, -size / 1.8);
   ctx.lineTo(size / 2, -size / 3);
@@ -1047,12 +868,11 @@ function drawShieldItem(ctx, x, y, size) {
   ctx.fill();
   ctx.stroke();
 
-  // 십자 문양
   ctx.strokeStyle = '#FFFFFF';
-  ctx.lineWidth = 2.2;
+  ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(0, -size / 3.2);
-  ctx.lineTo(0, size / 3.2);
+  ctx.moveTo(0, -size / 3.5);
+  ctx.lineTo(0, size / 3.5);
   ctx.moveTo(-size / 4, 0);
   ctx.lineTo(size / 4, 0);
   ctx.stroke();
@@ -1060,16 +880,13 @@ function drawShieldItem(ctx, x, y, size) {
   ctx.restore();
 }
 
-// 4) 자석 🧲 아이템
+// 4) 자석 🧲
 function drawMagnetItem(ctx, x, y, size) {
   ctx.save();
   ctx.translate(x, y);
 
-  const bounce = Math.sin(Date.now() / 95) * 3;
-  ctx.translate(0, bounce);
-
-  ctx.strokeStyle = '#FF6B6B';
-  ctx.lineWidth = 7;
+  ctx.strokeStyle = '#FF7675';
+  ctx.lineWidth = 6;
   ctx.lineCap = 'round';
 
   ctx.beginPath();
@@ -1079,9 +896,8 @@ function drawMagnetItem(ctx, x, y, size) {
   ctx.lineTo(-size * 0.35, -7);
   ctx.stroke();
 
-  // 은색 팁
-  ctx.strokeStyle = '#FFFFFF';
-  ctx.lineWidth = 7;
+  ctx.strokeStyle = '#DFE6E9';
+  ctx.lineWidth = 6;
   ctx.beginPath();
   ctx.moveTo(-size * 0.35, -7);
   ctx.lineTo(-size * 0.35, -11);
@@ -1092,15 +908,15 @@ function drawMagnetItem(ctx, x, y, size) {
   ctx.restore();
 }
 
-// 5) 하트 아이템 ❤️
+// 5) 하트 ❤️
 function drawHeartItem(ctx, x, y, size) {
   ctx.save();
-  ctx.translate(x, y + Math.sin(Date.now() / 105) * 3.5);
+  ctx.translate(x, y);
 
   const s = size / 22;
-  ctx.fillStyle = '#FF6B6B';
+  ctx.fillStyle = '#FF7675';
   ctx.strokeStyle = OUTLINE_COLOR;
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 1.8;
 
   ctx.beginPath();
   ctx.moveTo(0, 9 * s);
@@ -1110,49 +926,41 @@ function drawHeartItem(ctx, x, y, size) {
   ctx.fill();
   ctx.stroke();
 
-  // 하이라이트
-  ctx.fillStyle = '#FFFFFF';
-  ctx.beginPath();
-  ctx.ellipse(-4 * s, -3 * s, 2.5 * s, 3.5 * s, -0.5, 0, Math.PI * 2);
-  ctx.fill();
-
   ctx.restore();
 }
 
-// 6) 모래시계 ⏳ 아이템
+// 6) 모래시계 ⏳
 function drawSlowItem(ctx, x, y, size) {
   ctx.save();
-  ctx.translate(x, y + Math.sin(Date.now() / 100) * 3);
+  ctx.translate(x, y);
 
   const s = size / 2;
   ctx.strokeStyle = OUTLINE_COLOR;
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 1.8;
 
-  // 위아래 프레임
-  ctx.fillStyle = '#FFFFFF';
+  ctx.fillStyle = '#DFE6E9';
   ctx.beginPath();
-  ctx.roundRect(-s * 0.8, -s, s * 1.6, 5, 2);
+  ctx.roundRect(-s * 0.8, -s, s * 1.6, 4, 2);
   ctx.fill();
   ctx.stroke();
 
   ctx.beginPath();
-  ctx.roundRect(-s * 0.8, s - 5, s * 1.6, 5, 2);
+  ctx.roundRect(-s * 0.8, s - 4, s * 1.6, 4, 2);
   ctx.fill();
   ctx.stroke();
 
-  // 쨍한 퍼플 모래
-  ctx.fillStyle = '#9C88FF';
+  ctx.fillStyle = '#A29BFE';
   ctx.beginPath();
-  ctx.moveTo(-s * 0.6, -s + 5);
-  ctx.lineTo(s * 0.6, -s + 5);
+  ctx.moveTo(-s * 0.6, -s + 4);
+  ctx.lineTo(s * 0.6, -s + 4);
   ctx.lineTo(0, 0);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
 
   ctx.beginPath();
-  ctx.moveTo(-s * 0.6, s - 5);
-  ctx.lineTo(s * 0.6, s - 5);
+  ctx.moveTo(-s * 0.6, s - 4);
+  ctx.lineTo(s * 0.6, s - 4);
   ctx.lineTo(0, 0);
   ctx.closePath();
   ctx.fill();
@@ -1168,20 +976,20 @@ function drawGate(ctx, x, y, w, h, bonus) {
 
   const half = w / 2;
   ctx.strokeStyle = OUTLINE_COLOR;
-  ctx.lineWidth = 2.5;
+  ctx.lineWidth = 2;
 
   // 기둥
-  ctx.fillStyle = bonus ? '#FFB8B8' : '#1DD1A1';
+  ctx.fillStyle = bonus ? '#E1B12C' : '#2ECC71';
   ctx.beginPath();
-  ctx.roundRect(-half, -h / 2, 9, h, 3);
-  ctx.roundRect(half - 9, -h / 2, 9, h, 3);
+  ctx.roundRect(-half, -h / 2, 8, h, 3);
+  ctx.roundRect(half - 8, -h / 2, 8, h, 3);
   ctx.fill();
   ctx.stroke();
 
-  // 현수막 (황금 게이트 vs 초록 게이트)
-  ctx.fillStyle = bonus ? '#FECA57' : '#1DD1A1';
+  // 현수막
+  ctx.fillStyle = bonus ? '#FDCB6E' : '#58D68D';
   ctx.beginPath();
-  ctx.roundRect(-half + 6, -h / 2, w - 12, h * 0.62, 5);
+  ctx.roundRect(-half + 5, -h / 2, w - 10, h * 0.62, 4);
   ctx.fill();
   ctx.stroke();
 
