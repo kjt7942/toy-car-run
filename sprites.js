@@ -355,7 +355,7 @@ function drawPlayer() {
   ctx.restore();
 }
 
-// 6) 쨍하고 명확한 고깔 콘 (위험 경고 장애물)
+// 6) 산뜻한 주황색 둥근 고깔 콘 (위험 경고 장애물)
 function drawCone(ctx, x, y, w, h) {
   ctx.save();
   ctx.translate(x, y);
@@ -371,11 +371,12 @@ function drawCone(ctx, x, y, w, h) {
   ctx.roundRect(-w / 2, h / 2 - 6, w, 4, 2);
   ctx.fill();
 
-  // 쨍한 당근 오렌지 삼각 콘
-  ctx.fillStyle = '#FF3838';
+  // 산뜻한 주황색 삼각 콘 (상단 꼭짓점을 둥글둥글 귀엽게 표현)
+  ctx.fillStyle = '#FF9F43';
   ctx.beginPath();
-  ctx.moveTo(0, -h / 2);
-  ctx.lineTo(-w / 2.5, h / 2 - 6);
+  ctx.moveTo(-w / 2.5, h / 2 - 6);
+  ctx.lineTo(-w / 8, -h / 2 + 3);
+  ctx.quadraticCurveTo(0, -h / 2 - 2, w / 8, -h / 2 + 3);
   ctx.lineTo(w / 2.5, h / 2 - 6);
   ctx.closePath();
   ctx.fill();
