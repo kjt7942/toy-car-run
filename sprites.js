@@ -355,7 +355,7 @@ function drawPlayer() {
   ctx.restore();
 }
 
-// 6) 산뜻한 주황색 둥근 고깔 콘 (위험 경고 장애물)
+// 6) 깔끔하고 쨍한 오렌지 둥근 고깔 콘 (위험 경고 장애물)
 function drawCone(ctx, x, y, w, h) {
   ctx.save();
   ctx.translate(x, y);
@@ -366,32 +366,32 @@ function drawCone(ctx, x, y, w, h) {
   ctx.roundRect(-w / 2 - 2, h / 2 - 4, w + 4, 5, 2);
   ctx.fill();
 
-  ctx.fillStyle = '#FF9F1A';
+  ctx.fillStyle = '#FF5E36';
   ctx.beginPath();
   ctx.roundRect(-w / 2, h / 2 - 6, w, 4, 2);
   ctx.fill();
 
-  // 산뜻한 주황색 삼각 콘 (상단 꼭짓점을 둥글둥글 귀엽게 표현)
-  ctx.fillStyle = '#FF9F43';
+  // 쨍하고 깔끔한 오렌지 삼각 콘 (상단 꼭짓점 둥글게)
+  ctx.fillStyle = '#FF5E36';
   ctx.beginPath();
-  ctx.moveTo(-w / 2.5, h / 2 - 6);
+  ctx.moveTo(-w / 2.4, h / 2 - 6);
   ctx.lineTo(-w / 8, -h / 2 + 3);
   ctx.quadraticCurveTo(0, -h / 2 - 2, w / 8, -h / 2 + 3);
-  ctx.lineTo(w / 2.5, h / 2 - 6);
+  ctx.lineTo(w / 2.4, h / 2 - 6);
   ctx.closePath();
   ctx.fill();
   ctx.strokeStyle = OUTLINE_COLOR;
   ctx.lineWidth = OUTLINE_WIDTH;
   ctx.stroke();
 
-  // 선명한 순백 띠 2개
+  // 깔끔하고 선명한 순백 띠 2개
   ctx.fillStyle = '#FFFFFF';
 
   ctx.beginPath();
-  ctx.moveTo(-w / 7, -h / 6);
-  ctx.lineTo(w / 7, -h / 6);
-  ctx.lineTo(w / 4.5, h / 6);
-  ctx.lineTo(-w / 4.5, h / 6);
+  ctx.moveTo(-w / 6.5, -h / 6);
+  ctx.lineTo(w / 6.5, -h / 6);
+  ctx.lineTo(w / 4.2, h / 6);
+  ctx.lineTo(-w / 4.2, h / 6);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
@@ -500,39 +500,61 @@ function drawBarrier(ctx, x, y, w, h) {
   ctx.restore();
 }
 
-// 9) 어두운 갈색 클래식 오일 드럼통
+// 9) 어두운 갈색 직관적인 3D 오일 드럼통
 function drawOilDrum(ctx, x, y, w, h) {
   ctx.save();
   ctx.translate(x, y);
 
   // 그림자
   ctx.fillStyle = 'rgba(0,0,0,0.18)';
-  ctx.fillRect(-w / 2 - 2, h / 2 - 3, w + 4, 6);
+  ctx.beginPath();
+  ctx.ellipse(0, h / 2 + 1, w * 0.55, 3.5, 0, 0, Math.PI * 2);
+  ctx.fill();
 
-  // 어두운 갈색 드럼통 바디
-  ctx.fillStyle = '#4E342E';
   ctx.strokeStyle = OUTLINE_COLOR;
   ctx.lineWidth = OUTLINE_WIDTH;
 
+  // 1. 메인 드럼통 바디 (어두운 클래식 다크 브라운 원통)
+  ctx.fillStyle = '#5D4037';
   ctx.beginPath();
-  ctx.roundRect(-w / 2, -h / 2, w, h, 6);
+  ctx.roundRect(-w / 2, -h / 2 + 3, w, h - 3, 4);
   ctx.fill();
   ctx.stroke();
 
-  // 중간 띠선
-  ctx.strokeStyle = '#DCDDE1';
-  ctx.lineWidth = 2;
+  // 2. 강철 3중 리벳 수평선 링
+  ctx.strokeStyle = '#8D6E63';
+  ctx.lineWidth = 2.5;
+
   ctx.beginPath();
-  ctx.moveTo(-w / 2, -h / 6);
-  ctx.lineTo(w / 2, -h / 6);
-  ctx.moveTo(-w / 2, h / 6);
-  ctx.lineTo(w / 2, h / 6);
+  ctx.moveTo(-w / 2, -h / 4);
+  ctx.lineTo(w / 2, -h / 4);
+  ctx.moveTo(-w / 2, 0);
+  ctx.lineTo(w / 2, 0);
+  ctx.moveTo(-w / 2, h / 4);
+  ctx.lineTo(w / 2, h / 4);
   ctx.stroke();
 
-  // 황금 오일 마크
-  ctx.fillStyle = '#FFD32A';
+  // 3. 드럼통 상단 타원형 입체 뚜껑 (원통의 입체감 파악 포인트)
+  ctx.fillStyle = '#6D4C41';
+  ctx.strokeStyle = OUTLINE_COLOR;
+  ctx.lineWidth = OUTLINE_WIDTH;
   ctx.beginPath();
-  ctx.arc(0, 2, 4.5, 0, Math.PI * 2);
+  ctx.ellipse(0, -h / 2 + 3, w / 2, 3.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // 주유구 마크
+  ctx.fillStyle = '#3E2723';
+  ctx.beginPath();
+  ctx.arc(-w / 4, -h / 2 + 3, 2.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 4. 전면 쨍한 오일 방울 위험 마크
+  ctx.fillStyle = '#FFD32A';
+  ctx.strokeStyle = OUTLINE_COLOR;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(0, 3, 4.5, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
 
