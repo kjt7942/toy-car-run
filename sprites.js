@@ -486,48 +486,63 @@ function drawRock(ctx, x, y, w, h) {
   ctx.ellipse(0, h / 3, w * 0.55, h * 0.25, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = '#F5F6FA';
+  // 각진 입체 다각형 바위 그리기
+  ctx.strokeStyle = '#2F3640';
+  ctx.lineWidth = 3.5;
+  ctx.lineJoin = 'round';
+
+  // 1. 왼쪽 뒤쪽 음영면 (어두운 회색)
+  ctx.fillStyle = '#7F8C8D';
   ctx.beginPath();
-  ctx.moveTo(-w / 2, h / 4);
-  ctx.lineTo(-w / 3, -h / 3);
-  ctx.lineTo(0, -h / 2);
-  ctx.lineTo(-w / 8, h / 6);
+  ctx.moveTo(-w/2, h/4);
+  ctx.lineTo(-w/3, -h/3);
+  ctx.lineTo(0, -h/2);
+  ctx.lineTo(-w/8, h/6);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
 
-  // 2. 우측 중앙 맑은 회색 베이지면
-  ctx.fillStyle = '#DCDDE1';
+  // 2. 오른쪽 메인 면 (중간 회색)
+  ctx.fillStyle = '#95A5A6';
   ctx.beginPath();
-  ctx.moveTo(0, -h / 2);
-  ctx.lineTo(w / 2.5, -h / 4);
-  ctx.lineTo(w / 2, h / 3);
-  ctx.lineTo(w / 6, h / 2);
-  ctx.lineTo(-w / 8, h / 6);
+  ctx.moveTo(0, -h/2);
+  ctx.lineTo(w/2.5, -h/4);
+  ctx.lineTo(w/2, h/3);
+  ctx.lineTo(w/6, h/2);
+  ctx.lineTo(-w/8, h/6);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
 
-  // 3. 상단 쨍한 골드 하이라이트 각도 포인트
-  ctx.fillStyle = '#FFD32A';
+  // 3. 상단 하이라이트 면 (밝은 회색)
+  ctx.fillStyle = '#BDC3C7';
   ctx.beginPath();
-  ctx.moveTo(-w / 3, -h / 3);
-  ctx.lineTo(0, -h / 2);
-  ctx.lineTo(w / 2.5, -h / 4);
-  ctx.lineTo(0, -h / 6);
+  ctx.moveTo(-w/3, -h/3);
+  ctx.lineTo(0, -h/2);
+  ctx.lineTo(w/2.5, -h/4);
+  ctx.lineTo(0, -h/6);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
 
-  // 4. 바위 하단 면
-  ctx.fillStyle = '#718093';
+  // 4. 바위 바닥 면
+  ctx.fillStyle = '#7F8C8D';
   ctx.beginPath();
-  ctx.moveTo(-w / 2, h / 4);
-  ctx.lineTo(-w / 8, h / 6);
-  ctx.lineTo(w / 6, h / 2);
-  ctx.lineTo(-w / 3, h / 2);
+  ctx.moveTo(-w/2, h/4);
+  ctx.lineTo(-w/8, h/6);
+  ctx.lineTo(w/6, h/2);
+  ctx.lineTo(-w/3, h/2);
   ctx.closePath();
   ctx.fill();
+  ctx.stroke();
+
+  // 갈라진 틈새 크랙 데코 추가
+  ctx.strokeStyle = '#2F3640';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(0, -h/6);
+  ctx.lineTo(-w/5, -h/25);
+  ctx.lineTo(-w/7, h/10);
   ctx.stroke();
 
   ctx.restore();
