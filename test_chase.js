@@ -185,6 +185,19 @@ const checks = JSON.parse(run(`
   (() => {
     const out = {};
 
+    // 웅덩이(미끄럼)는 반드시 불이익이어야 한다.
+    // 좌우 속도는 v = acc * fric / (1 - fric) 로 수렴하는데, 마찰만 올리고 가속을 충분히
+    // 낮추지 않으면 오히려 평상시보다 빨라져서 함정이 이동 속도 버프가 되어 버린다.
+    // 실제로 그렇게 되어 있었고 "웅덩이가 아무 효과 없는 것 같다"는 체감으로 드러났다.
+    const termSpeed = (acc, fric) => acc * fric / (1 - fric);
+    out.normalTopSpeed = +termSpeed(car.acc, car.friction).toFixed(2);
+    out.slipTopSpeed = +termSpeed(SLIPPERY_ACC, SLIPPERY_FRICTION).toFixed(2);
+
+    // 손을 뗐을 때 미끄러지는 거리 (이게 커야 "미끄럽다"는 느낌이 난다)
+    const slideDist = (v0, fric) => { let v = v0, x = 0; while (v > 0.05) { v *= fric; x += v; } return x; };
+    out.normalSlide = Math.round(slideDist(out.normalTopSpeed, car.friction));
+    out.slipSlide = Math.round(slideDist(out.slipTopSpeed, SLIPPERY_FRICTION));
+
     // 보행자가 접근하는 동안 옆으로 얼마나 새는가.
     // 이 값이 한 차선(60px)을 크게 넘으면 "빈 곳을 보고 꺾었더니 거기로 걸어오는" 상황이 되어
     // 예측 자체가 불가능해진다. 걷는 속도를 올릴 때 반드시 같이 확인해야 하는 수치다.
@@ -292,6 +305,10 @@ const checks = JSON.parse(run(`
 `));
 
 console.log('\n동작 검증:', JSON.stringify(checks, null, 2));
+assert(checks.slipTopSpeed < checks.normalTopSpeed,
+  `웅덩이는 함정이므로 좌우 속도가 평상시보다 느려야 한다 (평상시 ${checks.normalTopSpeed} / 웅덩이 ${checks.slipTopSpeed})`);
+assert(checks.slipSlide > checks.normalSlide * 2,
+  `웅덩이를 밟으면 확실히 미끄러져야 한다 (평상시 ${checks.normalSlide}px / 웅덩이 ${checks.slipSlide}px)`);
 assert(checks.worstCrosserDrift <= 90,
   `보행자가 다가오는 동안의 가로 이동이 한 차선(60px) 언저리여야 예측이 가능하다 (${checks.worstCrosserDrift}px)`);
 assert(checks.noChaseWithoutHit, '아무것도 치지 않으면 추격이 시작되지 않아야 한다');
