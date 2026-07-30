@@ -58,6 +58,7 @@ const dailyBtn = document.getElementById('dailyBtn');
 const dailyInfo = document.getElementById('dailyInfo');
 const dailyStat = document.getElementById('dailyStat');
 const reviveBtn = document.getElementById('reviveBtn');
+const homeBtn = document.getElementById('homeBtn');
 
 const magnetBar = badgeMagnet.querySelector('.badge-bar > i');
 const boosterBar = badgeBooster.querySelector('.badge-bar > i');
@@ -307,6 +308,29 @@ const BONUS_DURATION = 480; // 8초
 let lastStandTime = 0;
 const LAST_STAND_DURATION = 55;
 const LAST_STAND_FACTOR = 0.4;
+
+// --- [돌발 추격전] ---
+// 가만히 한 자리를 지키면 안전해지는 구간이 생기지 않도록, 일정 거리마다 추격자가 뒤에서 붙는다.
+// 15초를 버티면 코인 보너스, 잡히면 하트 1개.
+// 추격자의 좌우 속도는 플레이어보다 느려야 한다. 여기서 기준은 car.maxVx(7.2)가 아니라
+// 마찰까지 반영한 실제 순항 속도다: vx는 (vx + acc) * friction 으로 수렴하므로
+// 0.95 * 0.8 / (1 - 0.8) ≈ 3.8px/프레임이 플레이어가 실제로 낼 수 있는 좌우 속도다.
+// maxVx를 이 값 밑으로 유지해야 "계속 도망치면 떼어낼 수 있다"가 성립한다. 난이도 조절 지점.
+const CHASE_DURATION = 900;         // 15초 (60fps 기준)
+const CHASE_FIRST_DISTANCE = 9000;  // 첫 추격이 붙는 주행 거리
+const CHASE_INTERVAL = 16000;       // 추격이 끝난 뒤 다음 추격까지의 거리
+const CHASE_ESCAPE_COINS = 25;
+const CHASE_ESCAPE_SCORE = 1200;
+const CHASE_STUN = 70; // 장애물을 들이받은 추격자가 주춤하는 시간 (약 1.2초)
+// maxVx = 좌우 최고 속도(위 3.8보다 낮아야 도망칠 수 있다), grip = 그 속도에 붙는 민첩함
+const CHASE_TYPES = [
+  { id: 'police', name: '경찰차',     icon: '🚓', maxVx: 2.9, grip: 0.09, w: 38, h: 60 },
+  // 트럭이 너무 넓으면 벽에 몰린 플레이어가 옆으로 건널 틈 자체가 사라진다(도로 폭 240).
+  { id: 'truck',  name: '몬스터 트럭', icon: '🚚', maxVx: 2.0, grip: 0.06, w: 50, h: 66 }
+];
+let chaser = null;                  // 추격 중이 아니면 null
+let nextChaseDistance = CHASE_FIRST_DISTANCE;
+let sirenTimer = 0;
 
 // 화면 방해 오일 효과 리스트
 let screenOils = [];
@@ -571,6 +595,19 @@ function playSound(type) {
       osc.start(now);
       osc.stop(now + 0.45);
     } 
+    else if (type === 'siren') {
+      // 삐뽀삐뽀 사이렌. 추격 내내 1초마다 다시 울리므로 볼륨은 낮게 잡았다.
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(740, now);
+      osc.frequency.setValueAtTime(988, now + 0.22);
+      osc.frequency.setValueAtTime(740, now + 0.44);
+      osc.frequency.setValueAtTime(988, now + 0.66);
+      gainNode.gain.setValueAtTime(0.07, now);
+      gainNode.gain.setValueAtTime(0.07, now + 0.82);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.92);
+      osc.start(now);
+      osc.stop(now + 0.92);
+    }
     else if (type === 'gameover') {
       // 멜랑꼴리한 패배 하강 멜로디
       osc.type = 'sawtooth';
@@ -1281,6 +1318,106 @@ function drawTrafficCar(ctx, x, y, w, h) {
   ctx.restore();
 }
 
+// 추격자 렌더링. 경찰차는 번쩍이는 경광등, 몬스터 트럭은 거대한 바퀴로 한눈에 구분된다.
+function drawChaser(ctx, c) {
+  const w = c.kind.w;
+  const h = c.kind.h;
+  const blink = Math.floor(Date.now() / 130) % 2 === 0;
+
+  ctx.save();
+  ctx.translate(c.x, c.y);
+
+  // 장애물을 들이받고 주춤하는 동안에는 좌우로 휘청여서 지금은 못 덤빈다는 걸 알린다
+  if (c.stun > 0) ctx.rotate(Math.sin(Date.now() / 45) * 0.13);
+
+  // 그림자
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.beginPath();
+  ctx.roundRect(-w / 2 - 2, -h / 2 + 6, w + 4, h, 11);
+  ctx.fill();
+
+  ctx.strokeStyle = '#2F3640';
+  ctx.lineWidth = 3;
+
+  if (c.kind.id === 'truck') {
+    // 몬스터 트럭: 도로를 넓게 틀어막는 거구
+    ctx.fillStyle = '#2F3640';
+    ctx.beginPath();
+    ctx.arc(-w / 2 + 3, -h / 2 + 20, 13, 0, Math.PI * 2);
+    ctx.arc(w / 2 - 3, -h / 2 + 20, 13, 0, Math.PI * 2);
+    ctx.arc(-w / 2 + 3, h / 2 - 18, 13, 0, Math.PI * 2);
+    ctx.arc(w / 2 - 3, h / 2 - 18, 13, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#E17055';
+    ctx.beginPath();
+    ctx.roundRect(-w / 2 + 6, -h / 2, w - 12, h, 10);
+    ctx.fill();
+    ctx.stroke();
+
+    // 앞으로 튀어나온 범퍼 (플레이어를 향한 쪽)
+    ctx.fillStyle = '#B2BEC3';
+    ctx.beginPath();
+    ctx.roundRect(-w / 2 + 2, h / 2 - 12, w - 4, 11, 4);
+    ctx.fill();
+    ctx.stroke();
+
+    // 유리창
+    ctx.fillStyle = '#636E72';
+    ctx.beginPath();
+    ctx.roundRect(-w / 2 + 12, h / 6, w - 24, 14, 4);
+    ctx.fill();
+    ctx.stroke();
+  } else {
+    // 경찰차: 흑백 투톤 바디
+    ctx.fillStyle = '#F5F6FA';
+    ctx.beginPath();
+    ctx.roundRect(-w / 2, -h / 2, w, h, 11);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#2F3640';
+    ctx.beginPath();
+    ctx.roundRect(-w / 2, -h / 6, w, h / 3, 3);
+    ctx.fill();
+
+    ctx.fillStyle = '#81ECEC';
+    ctx.beginPath();
+    ctx.roundRect(-w / 2 + 5, h / 5, w - 10, 13, 4);
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  // 경광등. 경찰차는 빨강/파랑, 트럭은 공사장 노란 경고등으로 번쩍인다.
+  // 화면 아래쪽은 터치 버튼과 겹쳐 어두우므로, 이 불빛이 추격자를 알아보는 주된 단서가 된다.
+  const beacon = c.kind.id === 'truck'
+    ? (blink ? '#FFC312' : '#FF9F1A')
+    : (blink ? '#FF3B3B' : '#3B7BFF');
+  ctx.fillStyle = beacon;
+  ctx.beginPath();
+  ctx.roundRect(-11, -h / 2 - 6, 22, 9, 4);
+  ctx.fill();
+  ctx.stroke();
+
+  // 번쩍이는 쪽으로 퍼지는 빛무리
+  ctx.globalAlpha = 0.28;
+  ctx.fillStyle = beacon;
+  ctx.beginPath();
+  ctx.arc(blink ? -8 : 8, -h / 2 - 2, 17, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // 플레이어를 쫓는 헤드라이트
+  ctx.fillStyle = '#FFEAA7';
+  ctx.beginPath();
+  ctx.arc(-w / 3.2, h / 2 - 2, 4, 0, Math.PI * 2);
+  ctx.arc(w / 3.2, h / 2 - 2, 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.restore();
+}
+
 // --- [아이템 드로잉 함수군] ---
 
 // 1) 코인 렌더링 (빛나는 둥근 금화)
@@ -1847,6 +1984,8 @@ function startGame(daily = false) {
   nextLevelDistance = LEVEL_DISTANCE;
   spawnTimer = 0;
   spawnInterval = 70;
+  chaser = null;
+  nextChaseDistance = CHASE_FIRST_DISTANCE;
 
   runStats = { coins: 0, destroyed: 0, damage: 0, maxMult: 1, nearMisses: 0 };
   recordBeaten = false;
@@ -1896,6 +2035,8 @@ function startGame(daily = false) {
 // --- [코인 부활] ---
 // 잘 달리던 판이 한 번의 실수로 끝나는 게 가장 아깝다. 모아 둔 코인으로 딱 한 번 되산다.
 const REVIVE_COST = 300;
+// 코인 하나당 실제로 쌓이는 코인 가치. 300코인 모으기가 유독 힘들다는 피드백을 반영해 50% 상향.
+const COIN_VALUE_MULT = 1.5;
 let revivedThisRun = false;
 let preGameOverSave = null;   // 게임오버가 기록에 반영한 내용을 되돌리기 위한 직전 상태
 
@@ -1919,6 +2060,10 @@ function doRevive() {
 
   // 부활하자마자 눈앞의 장애물에 그대로 다시 박으면 코인만 날린 셈이 된다
   obstacles = obstacles.filter(o => o.y < car.y - 220);
+
+  // 추격에 잡혀서 끝난 판이라면 살아나자마자 다시 잡히지 않도록 추격을 풀어준다
+  chaser = null;
+  nextChaseDistance = distance + CHASE_INTERVAL;
 
   startBgm();
   playSound('heal');
@@ -1959,7 +2104,8 @@ function triggerGameOver() {
 
   // 누적 기록 갱신
   save.runs++;
-  save.coins += runStats.coins;
+  const earnedCoins = Math.round(runStats.coins * COIN_VALUE_MULT);
+  save.coins += earnedCoins;
   save.totalDistance += distance;
   if (runStats.maxMult > save.bestCombo) save.bestCombo = runStats.maxMult;
 
@@ -1979,7 +2125,7 @@ function triggerGameOver() {
 
   finalScore.textContent = roundedScore;
   bestScore.textContent = dailyRun ? save.daily.best : save.best;
-  runCoinsVal.textContent = runStats.coins;
+  runCoinsVal.textContent = earnedCoins;
   runComboVal.textContent = 'x' + runStats.maxMult;
   runDistVal.textContent = toMeters(distance) + 'm';
 
@@ -2093,6 +2239,11 @@ function handleCollision(obsIndex) {
 
   // 일반 충돌 시 라이프 차감
   obstacles.splice(obsIndex, 1);
+  takeDamage();
+}
+
+// 라이프 1 차감 경로. 장애물 충돌과 추격자에게 잡힌 경우가 모두 여기를 지난다.
+function takeDamage(label = "앗!!") {
   playSound('crash');
   lives--;
   runStats.damage++;
@@ -2102,19 +2253,164 @@ function handleCollision(obsIndex) {
   shakeTime = 20;
   shakeAmount = 10;
   createCrashParticles(car.x, car.y - 10, '#FF7675');
-  addFloatingText(car.x, car.y - 40, "앗!!", "#FF5757");
+  addFloatingText(car.x, car.y - 40, label, "#FF5757");
 
   if (lives <= 0) {
     triggerGameOver();
-  } else {
-    invincibleTime = INVINCIBLE_DURATION;
-    // 하트 하나만 남은 순간, 시간을 늘려 위기라는 걸 몸으로 알린다
-    if (lives === 1) {
-      lastStandTime = LAST_STAND_DURATION;
-      playSound('slow');
-      addFloatingText(car.x, car.y - 70, '마지막 하트!', '#FF5757');
-    }
+    return;
   }
+
+  invincibleTime = INVINCIBLE_DURATION;
+  // 하트 하나만 남은 순간, 시간을 늘려 위기라는 걸 몸으로 알린다
+  if (lives === 1) {
+    lastStandTime = LAST_STAND_DURATION;
+    playSound('slow');
+    addFloatingText(car.x, car.y - 70, '마지막 하트!', '#FF5757');
+  }
+}
+
+// --- [돌발 추격전 로직] ---
+
+function startChase() {
+  const kind = CHASE_TYPES[Math.floor(Math.random() * CHASE_TYPES.length)];
+  chaser = {
+    kind: kind,
+    x: car.x,
+    y: GAME_HEIGHT + 60, // 화면 아래(플레이어 뒤)에서 밀고 올라온다
+    vx: 0,
+    time: CHASE_DURATION,
+    lungePhase: Math.PI, // 물러나 있는 상태에서 시작해 등장 직후 반응할 틈을 준다
+    stun: 0              // 장애물을 들이받아 주춤한 잔여 시간
+  };
+  sirenTimer = 0;
+  playSound('siren');
+  shakeTime = 16;
+  shakeAmount = 5;
+  addFloatingText(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 60, `${kind.icon} ${kind.name} 출동!`, '#FF5757');
+  addFloatingText(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 20, '15초만 버텨!', '#FFDE59');
+}
+
+function endChase(escaped) {
+  if (!chaser) return;
+  chaser = null;
+  nextChaseDistance = distance + CHASE_INTERVAL;
+  if (!escaped) return;
+
+  runStats.coins += CHASE_ESCAPE_COINS;
+  const gain = gainScore(CHASE_ESCAPE_SCORE);
+  playSound('levelup');
+  addFloatingText(car.x, car.y - 62, `따돌렸다! 🪙+${CHASE_ESCAPE_COINS}`, '#FFD700');
+  addFloatingText(car.x, car.y - 28, `+${gain}`, '#FFD700');
+  createCrashParticles(car.x, car.y, '#FFD700');
+  shakeTime = 12;
+  shakeAmount = 4;
+}
+
+function updateChase(dt) {
+  if (!chaser) {
+    if (distance >= nextChaseDistance) startChase();
+    return;
+  }
+
+  const c = chaser;
+  c.time -= dt;
+  if (c.time <= 0) {
+    endChase(true);
+    return;
+  }
+
+  // 사이렌은 1초마다 다시 울려 추격 중이라는 걸 계속 상기시킨다
+  sirenTimer -= dt;
+  if (sirenTimer <= 0) {
+    sirenTimer = 60;
+    playSound('siren');
+  }
+
+  // 뒤에 계속 붙어 있으면 벽에 몰린 순간 빠져나갈 길이 사라져 "피할 수 없는 죽음"이 된다.
+  // 그래서 추격자는 물러나 있다가 짧게 들이받기를 반복한다. 물러난 사이에 반대편으로
+  // 건너갈 틈이 생기고, 들이받는 순간이 곧 피해야 할 타이밍이 되어 리듬이 읽힌다.
+  const progress = 1 - c.time / CHASE_DURATION;
+  if (c.stun > 0) {
+    // 주춤하는 동안에는 달려들기가 취소되고, 풀린 뒤 물러난 상태에서 다시 시작한다.
+    // 앞으로 갈 수 없는 플레이어에게 "숨 돌릴 틈"을 만들어 주는 보상이다.
+    c.stun -= dt;
+    c.lungePhase = Math.PI;
+  } else {
+    c.lungePhase += (0.022 + progress * 0.012) * dt;
+  }
+  // 지수를 올릴수록 물러나 있는 시간이 길고 들이받는 순간이 짧아진다 = 숨 돌릴 틈
+  const lunge = Math.pow(Math.max(0, Math.sin(c.lungePhase)), 5);
+  // 조향을 일찍 멈출수록 "덤벼들 자리"가 빨리 고정되어 비킬 시간이 길어진다.
+  // 벽에 몰린 채 잡히는 억울한 죽음이 여기서 갈린다.
+  const lunging = lunge > 0.04;
+
+  // 좌우 추적. 최고 속도가 플레이어보다 느리므로 계속 움직이면 떼어낼 수 있다.
+  // 단, 들이받는 동안에는 조향을 멈추고 달려든 자리에 그대로 꽂힌다. 덤비는 지점이
+  // 미리 고정되므로 옆으로 한 걸음만 비켜도 피해진다 = 벽에 몰려도 살길이 남는다.
+  if (lunging || c.stun > 0) {
+    c.vx *= Math.pow(0.88, dt);
+  } else {
+    // 목표 속도를 거리에 비례시켜 잡는다. 단순 가속이면 플레이어를 지나쳐 좌우로 출렁이다가
+    // 가만히 서 있는 상대조차 놓친다. 이렇게 하면 흔들림 없이 옆 차선에 딱 붙는다.
+    const desiredVx = Math.max(-c.kind.maxVx, Math.min(c.kind.maxVx, (car.x - c.x) * 0.12));
+    c.vx += (desiredVx - c.vx) * Math.min(1, c.kind.grip * dt);
+  }
+  c.x += c.vx * dt;
+
+  const minX = roadX + c.kind.w / 2;
+  const maxX = roadX + roadWidth - c.kind.w / 2;
+  if (c.x < minX) { c.x = minX; c.vx = 0; }
+  if (c.x > maxX) { c.x = maxX; c.vx = 0; }
+
+  // 물러난 위치도 화면 안이어야 한다. 플레이어가 y=520이라 간격을 124까지 벌리면 캔버스(640)
+  // 밖으로 나가 추격자가 아예 보이지 않고, 그러면 들이받는 리듬을 읽을 수가 없다.
+  const targetY = car.y + 92 - lunge * 70;
+  c.y += (targetY - c.y) * Math.min(1, 0.12 * dt);
+
+  // 추격자도 도로 위 장애물을 그대로 들이받는다. 뒤에서 쫓아오는 상대를 앞으로는 피할 수 없으니,
+  // 장애물이 내려오는 줄에 서 있다가 옆으로 빠져 대신 맞게 하는 것이 유일한 반격 수단이 된다.
+  for (let i = obstacles.length - 1; i >= 0; i--) {
+    const obs = obstacles[i];
+    if (obs.type === 'puddle') continue; // 바닥에 고인 물은 그냥 밟고 지나간다
+    if (Math.abs(obs.x - c.x) > (obs.width + c.kind.w) * 0.5 * 0.7) continue;
+    if (Math.abs(obs.y - c.y) > (obs.height + c.kind.h) * 0.5 * 0.7) continue;
+
+    obstacles.splice(i, 1);
+    c.stun = CHASE_STUN;
+    playSound('crash');
+    createCrashParticles(obs.x, obs.y, '#FD9644');
+    addCombo();
+    const gain = gainScore(DESTROY_SCORE);
+    addFloatingText(c.x, c.y - 40, `유인 성공! +${gain}`, '#7ED957');
+    shakeTime = 10;
+    shakeAmount = 4;
+  }
+
+  // 잡힘 판정. 추격 중에는 장애물도 같이 피해야 하므로 히트박스를 넉넉하게 잡았다.
+  const hitX = Math.abs(car.x - c.x) < (car.width + c.kind.w) * 0.5 * 0.56;
+  const hitY = Math.abs(car.y - c.y) < (car.height + c.kind.h) * 0.5 * 0.56;
+  if (!hitX || !hitY) return;
+
+  // 피버 중에는 그대로 들이받고 뚫어 버린다 = 탈출 성공
+  if (boosterTime > 0) {
+    endChase(true);
+    return;
+  }
+  if (invincibleTime > 0) return;
+
+  // 보호막은 한 번 막아주고 추격자를 잠시 밀어낸다. 추격 자체는 계속된다.
+  if (activeShield) {
+    activeShield = false;
+    playSound('item');
+    createCrashParticles(car.x, car.y, '#81ECEC');
+    addFloatingText(car.x, car.y - 40, 'SHIELD BLOCK!', '#00CEC9');
+    invincibleTime = 45;
+    c.y += 80;
+    return;
+  }
+
+  takeDamage('잡혔다!!');
+  endChase(false);
 }
 
 // 충돌 스파크 파티클
@@ -2352,14 +2648,17 @@ const PATTERNS = [
   },
   {
     // 시련의 길: 촘촘한 좌우 벽 + 고배점 코인. 고레벨에서만 등장
-    name: 'gauntlet', minLevel: 5, weight: 11, growth: 0.12,
+    // 코인 유도 경로를 반대편 벽까지 완전히 건너야 하는 구조라 고속 구간에서
+    // 좌우 이동 속도로는 다음 줄이 오기 전에 도달이 불가능했다. 줄 간격을
+    // 늘리고 유도 코인을 콘 옆 좁은 틈(스윙 폭 축소)으로 당겨 통과 가능하게 조정.
+    name: 'gauntlet', minLevel: 5, weight: 11, growth: 0.08,
     build() {
       const dir = Math.random() < 0.5 ? 1 : -1;
       for (let i = 0; i < 4; i++) {
         const side = i % 2 === 0 ? dir : -dir;
-        pushObs('barrier', 0.5 + side * 0.52, i * 92);
-        pushObs('cone', 0.5 - side * 0.05, i * 92 + 46);
-        pushItem('coin', 0.5 - side * 0.46, i * 92 + 46, true);
+        pushObs('barrier', 0.5 + side * 0.52, i * 128);
+        pushObs('cone', 0.5 - side * 0.14, i * 128 + 46);
+        pushItem('coin', 0.5 - side * 0.30, i * 128 + 46, true);
       }
     }
   },
@@ -2406,15 +2705,21 @@ function patternWeight(p) {
   return Math.max(1, p.weight * bonus);
 }
 
+// 추격 중에는 좌우로 계속 피해 다녀야 하므로, 옆으로 빠질 길이 거의 없는 패턴이 겹치면
+// 피할 방법이 없는 죽음이 된다. 추격 중에만 이 둘을 후보에서 뺀다.
+const CHASE_BANNED_PATTERNS = ['gauntlet', 'funnel'];
+
 // 현재 레벨에서 뽑을 수 있는 패턴 중 가중치에 따라 하나를 고른다
 function pickPattern() {
+  const usable = PATTERNS.filter(p =>
+    p.minLevel <= level && !(chaser && CHASE_BANNED_PATTERNS.includes(p.name))
+  );
+
   let total = 0;
-  for (const p of PATTERNS) {
-    if (p.minLevel <= level) total += patternWeight(p);
-  }
+  for (const p of usable) total += patternWeight(p);
+
   let roll = Math.random() * total;
-  for (const p of PATTERNS) {
-    if (p.minLevel > level) continue;
+  for (const p of usable) {
     roll -= patternWeight(p);
     if (roll <= 0) return p;
   }
@@ -2721,6 +3026,13 @@ function update(dt = 1.0) {
     // 교통 차량은 플레이어보다 느리게 내려오며 좌우로 흔들린다
     obs.y += targetSpeed * (obs.speedMul || 1) * dt;
 
+    // 방해차량은 가만히 중앙에 서 있는 플레이어 쪽으로 서서히 쏠려온다.
+    // (가운데 고정 회피가 항상 통하지 않도록 만드는 견제 장치. 정적 장애물 배치는 건드리지 않는다.)
+    if (obs.type === 'car') {
+      obs.vx += Math.sign(car.x - obs.x) * 0.014 * dt;
+      obs.vx = Math.max(-2.2, Math.min(2.2, obs.vx));
+    }
+
     if (obs.vx) {
       obs.x += obs.vx * dt;
       const minX = roadX + obs.width / 2;
@@ -2785,6 +3097,10 @@ function update(dt = 1.0) {
       }
     }
   }
+
+  // 9-b. 돌발 추격전 (차량 위치가 확정된 뒤에 판정해야 추적이 한 프레임 밀리지 않는다)
+  updateChase(dt);
+  if (gameState !== 'PLAYING') return;
 
   // 10. 충돌 스파크 파티클 업데이트
   for (let i = particles.length - 1; i >= 0; i--) {
@@ -2913,6 +3229,9 @@ function draw() {
     }
   });
 
+  // 8-b. 추격자는 플레이어보다 뒤(아래)에 있으므로 플레이어보다 먼저 그린다
+  if (chaser) drawChaser(ctx, chaser);
+
   // 9. 플레이어 배기가스 먼지 그리기
   dustParticles.forEach(d => {
     ctx.save();
@@ -2968,6 +3287,25 @@ function draw() {
     ctx.fillText(ft.text, 0, 0);
     ctx.restore();
   });
+
+  // 13-b. 추격 중에는 붉은 경고 테두리와 남은 시간을 띄운다
+  if (chaser) {
+    ctx.save();
+    ctx.strokeStyle = `rgba(255, 87, 87, ${0.35 + Math.abs(Math.sin(Date.now() / 180)) * 0.3})`;
+    ctx.lineWidth = 12;
+    ctx.strokeRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+    // DOM HUD(점수/콤보 바)가 차지하는 위쪽을 피해 그 아래에 얹는다
+    const label = `${chaser.kind.icon} 탈출까지 ${Math.ceil(chaser.time / 60)}초`;
+    ctx.font = '900 21px "Jua", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.strokeStyle = '#2F3640';
+    ctx.lineWidth = 5;
+    ctx.strokeText(label, GAME_WIDTH / 2, 178);
+    ctx.fillStyle = '#FFDE59';
+    ctx.fillText(label, GAME_WIDTH / 2, 178);
+    ctx.restore();
+  }
 
   // 14. 피버 모드일 때 화면 가장자리 네온 아우라 광원 연출
   if (boosterTime > 0) {
@@ -3096,6 +3434,12 @@ bindTap(muteBtn, () => {
 
 bindTap(dailyBtn, () => startGame(true));
 bindTap(reviveBtn, doRevive);
+bindTap(homeBtn, () => {
+  gameState = 'START';
+  gameOverScreen.classList.remove('active');
+  updateDailyInfo();
+  startScreen.classList.add('active');
+});
 
 bindTap(controlBtn, () => {
   save.control = save.control === 'drag' ? 'buttons' : 'drag';
