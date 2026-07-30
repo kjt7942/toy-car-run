@@ -475,7 +475,7 @@ function drawCone(ctx, x, y, w, h) {
   ctx.restore();
 }
 
-// 7) 맑고 선명한 크림 베이지 다각형 바위 (둔탁함 완전 해결!)
+// 7) 3D 입체 다각형 회색 바위
 function drawRock(ctx, x, y, w, h) {
   ctx.save();
   ctx.translate(x, y);
@@ -486,11 +486,6 @@ function drawRock(ctx, x, y, w, h) {
   ctx.ellipse(0, h / 3, w * 0.55, h * 0.25, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.strokeStyle = OUTLINE_COLOR;
-  ctx.lineWidth = OUTLINE_WIDTH;
-  ctx.lineJoin = 'round';
-
-  // 1. 좌측 부드러운 파스텔 크림면
   ctx.fillStyle = '#F5F6FA';
   ctx.beginPath();
   ctx.moveTo(-w / 2, h / 4);
