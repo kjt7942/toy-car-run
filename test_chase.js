@@ -47,7 +47,11 @@ const ctx = vm.createContext({
   performance: { now: () => Date.now() }
 });
 
-vm.runInContext(fs.readFileSync('D:/ai_project/toy-car-run/game.js', 'utf8'), ctx, { filename: 'game.js' });
+// index.html과 같은 순서로 읽어들인다. game.js의 draw()가 sprites.js의 함수를 부르므로
+// 스프라이트 파일이 빠지면 첫 프레임에서 바로 터진다.
+for (const file of ['sprites.js', 'game.js']) {
+  vm.runInContext(fs.readFileSync('D:/ai_project/toy-car-run/' + file, 'utf8'), ctx, { filename: file });
+}
 const run = (code) => vm.runInContext(code, ctx);
 
 // 오디오는 노드에 없으므로 호출만 세고 넘긴다 (사이렌이 실제로 울리는지 확인용)
