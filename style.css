@@ -417,18 +417,6 @@ html, body {
   flex: 0 0 52px;
 }
 
-/* 드래그 감도 슬라이더 (드래그 조작일 때만 노출) */
-.opt-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-  font-size: 0.9rem;
-  font-weight: bold;
-  color: var(--dark);
-}
-
-.opt-row.hidden,
 .sale-note.hidden {
   display: none;
 }
@@ -478,17 +466,6 @@ html, body {
 
 .btn-revive.hidden {
   display: none;
-}
-
-.opt-row input[type="range"] {
-  flex: 1;
-  accent-color: var(--primary-color);
-  min-width: 0;
-}
-
-.opt-row b {
-  flex: 0 0 26px;
-  text-align: right;
 }
 
 /* 기록/차고 화면은 내용이 길어 스크롤을 허용 */
@@ -768,24 +745,16 @@ html, body {
   margin-top: 18px;
 }
 
-/* 모바일 터치 컨트롤 (좌우 터치 패널) */
+/* 모바일 터치 컨트롤 (좌우 터치 패널)
+   화면 아래 절반을 좌/우로 갈라 통째로 누름 판정에 쓴다. 영역이 넓을수록 조준할 필요가 없다. */
 #touchControls {
   position: absolute;
   bottom: 0;
   left: 0;
   width: 100%;
-  height: 25%; 
+  height: 45%;
   display: flex;
   z-index: 15;
-}
-
-/* 드래그 조작: 화면 전체를 잡을 수 있게 넓히고 좌/우 버튼 비주얼은 감춘다 */
-#touchControls.drag-mode {
-  height: 100%;
-}
-
-#touchControls.drag-mode .touch-zone {
-  display: none;
 }
 
 .touch-zone {
@@ -795,14 +764,14 @@ html, body {
   justify-content: center;
   align-items: center;
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent; 
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* 은은한 화살표 비주얼 데코레이션 */
+/* 화살표 비주얼. 평소에는 완전히 투명해 게임 화면을 가리지 않는다. */
 .touch-btn-visual {
-  width: 75px;
-  height: 75px;
-  background: rgba(255, 255, 255, 0.28);
+  width: 88px;
+  height: 88px;
+  background: rgba(255, 255, 255, 0.22);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
   border: 3px solid rgba(255, 255, 255, 0.5);
@@ -811,22 +780,51 @@ html, body {
   justify-content: center;
   align-items: center;
   color: white;
-  font-size: 1.9rem;
+  font-size: 2.1rem;
   font-weight: 900;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-  transition: all 0.15s ease;
-  pointer-events: none; 
-  opacity: 0.65;
+  transition: opacity 0.5s ease, transform 0.15s ease, background 0.15s ease;
+  pointer-events: none;
+  opacity: 0;
 }
 
-/* 터치 영역 터치 시 시각적 피드백 */
-.touch-zone:active .touch-btn-visual {
-  background: var(--primary-color);
-  border-color: var(--dark);
-  color: var(--dark);
-  transform: scale(1.18);
+/* 시작 직후 가이드: 좌우 버튼과 안내 문구를 잠깐 띄웠다가 스르르 사라진다 */
+#touchControls.guide .touch-btn-visual {
+  opacity: 0.9;
+  animation: guidePulse 1s ease-in-out infinite;
+}
+
+.touch-guide-hint {
+  position: absolute;
+  bottom: 14px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  color: #FFFFFF;
+  font-size: 0.95rem;
+  font-weight: 900;
+  text-shadow: 0 2px 0 rgba(47, 54, 64, 0.85), 0 0 10px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+#touchControls.guide .touch-guide-hint {
   opacity: 1;
-  box-shadow: 0 0 18px var(--primary-color);
+}
+
+@keyframes guidePulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.12); }
+}
+
+/* 누르는 동안에만 은은하게 비쳐 눌렸다는 걸 알려준다 */
+.touch-zone:active .touch-btn-visual {
+  opacity: 0.5;
+  background: rgba(255, 222, 89, 0.45);
+  transform: scale(1.1);
+  transition: opacity 0.08s ease, transform 0.08s ease;
+  animation: none;
 }
 
 /* 둥둥 뜨는 플로팅 애니메이션 */

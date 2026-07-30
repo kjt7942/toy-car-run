@@ -52,7 +52,6 @@ const run = (code) => vm.runInContext(code, ctx);
 
 // 오디오는 노드에 없으므로 호출만 세고 넘긴다 (사이렌이 실제로 울리는지 확인용)
 run(`
-  var ALL_CHASE_TYPES = CHASE_TYPES.slice(); // 종류별 강제 지정 후 되돌리기 위한 원본
   var soundLog = [];
   playSound = function (t) { soundLog.push(t); };
   playBgmNote = function () {};
@@ -61,17 +60,11 @@ run(`
 
   // 밸런스 측정에서는 장애물을 끄고 추격만 남긴다 (변수를 하나로 줄여야 수치가 읽힌다).
   // withPatterns를 주면 실제 게임처럼 장애물까지 함께 굴린다.
-  function setupRun(forcedKind, withPatterns) {
+  function setupRun(withPatterns) {
     soundLog = [];
     spawnPattern = withPatterns ? ORIG_SPAWN : function () { spawnTimer = -99999; };
     startGame(false);
     lives = 99;
-    distance = CHASE_FIRST_DISTANCE;
-    if (forcedKind) {
-      var k = CHASE_TYPES.find(function (t) { return t.id === forcedKind; });
-      CHASE_TYPES.length = 0;
-      CHASE_TYPES.push(k);
-    }
   }
 
   // steer: 매 프레임 호출되어 -1(왼쪽) / 0(정지) / 1(오른쪽)을 돌려주는 조작기.
@@ -80,8 +73,7 @@ run(`
   var simFrame = 0, lastDir = 0, reactAt = 0;
   function simulate(steer) {
     var startLives = lives;
-    var f = 0;
-    while (chaser === null && f < 600) { update(1.0); f++; }
+    startChase(); // 추격은 사람/동물을 쳤을 때만 시작되므로 여기서 직접 유발한다
     if (chaser === null) return { spawned: false };
 
     // 추격 시작 위치를 무작위로 흩뜨린다 (벽에 몰린 채 시작하는 경우까지 포함)
@@ -143,73 +135,100 @@ run(`
   }
 `);
 
-const trial = (kind, steer) => JSON.parse(run(
-  `setupRun('${kind}'); JSON.stringify(simulate(${steer}))`
+const trial = (steer) => JSON.parse(run(
+  `setupRun(); JSON.stringify(simulate(${steer}))`
 ));
 
-const CHASER_IDS = JSON.parse(run(`JSON.stringify(CHASE_TYPES.map(t => t.id))`));
-const results = {};
-
-for (const kind of CHASER_IDS) {
-  const afk = [];
-  const dodge = [];
-  const skilled = [];
-  for (let i = 0; i < 100; i++) {
-    // 원본 CHASE_TYPES가 setupRun에서 잘려나가므로 매 시행마다 파일을 새로 로드하는 대신
-    // 강제 지정한 종류만 남긴 상태로 반복한다 (종류별로 따로 측정하므로 문제 없음).
-    afk.push(trial(kind, '() => 0'));
-    dodge.push(trial(kind, 'humanDodge'));
-    skilled.push(trial(kind, 'skilledDodge'));
-  }
-  results[kind] = {
-    afk잡힘: afk.filter(r => r.caught).length + '/' + afk.length,
-    회피탈출: dodge.filter(r => r.escaped).length + '/' + dodge.length,
-    능숙탈출: skilled.filter(r => r.escaped).length + '/' + skilled.length,
-    탈출코인: dodge.find(r => r.escaped) ? dodge.find(r => r.escaped).coins : 0
-  };
-  // 다음 종류를 시험하려면 원본 목록을 복구해야 한다
-  run(`CHASE_TYPES.length = 0; ALL_CHASE_TYPES.forEach(t => CHASE_TYPES.push(t));`);
+const afk = [];
+const dodge = [];
+const skilled = [];
+for (let i = 0; i < 100; i++) {
+  afk.push(trial('() => 0'));
+  dodge.push(trial('humanDodge'));
+  skilled.push(trial('skilledDodge'));
 }
+const results = {
+  afk잡힘: afk.filter(r => r.caught).length + '/' + afk.length,
+  회피탈출: dodge.filter(r => r.escaped).length + '/' + dodge.length,
+  능숙탈출: skilled.filter(r => r.escaped).length + '/' + skilled.length,
+  탈출코인: dodge.find(r => r.escaped) ? dodge.find(r => r.escaped).coins : 0
+};
 
-console.log(JSON.stringify(results, null, 2));
+console.log('경찰 추격 밸런스:', JSON.stringify(results, null, 2));
 
 let failed = false;
 const assert = (cond, msg) => { if (!cond) { console.error('FAIL:', msg); failed = true; } };
-for (const kind of CHASER_IDS) {
-  const r = results[kind];
+{
+  const r = results;
   const [afkCaught, afkTotal] = r.afk잡힘.split('/').map(Number);
   const [esc, escTotal] = r.회피탈출.split('/').map(Number);
   const [sk, skTotal] = r.능숙탈출.split('/').map(Number);
   // 이 장치가 공정하려면 세 가지가 동시에 성립해야 한다.
-  //  - 가만히 있으면 반드시 잡힌다 (추격전을 넣은 이유 자체)
+  //  - 가만히 있으면 반드시 잡힌다 (버티기가 실제 과제여야 한다)
   //  - 어설프게라도 계속 피하면 절반 이상은 산다 (운이 아니라 대응의 문제)
   //  - 달려드는 걸 보고 비키면 거의 다 산다 (실력으로 넘을 수 있는 벽)
-  assert(afkCaught === afkTotal, `${kind}: 가만히 있으면 항상 잡혀야 한다 (${r.afk잡힘})`);
-  // 실측(각 100회): 방치 0% / 어설픈 회피 73~77% / 달려들 때 비키기 95~96%
-  assert(esc / escTotal >= 0.55, `${kind}: 계속 피하면 절반 이상 살아남아야 한다 (${r.회피탈출})`);
-  assert(sk / skTotal >= 0.85, `${kind}: 달려들 때 비키면 거의 살아야 한다 (${r.능숙탈출})`);
-  assert(sk > esc, `${kind}: 잘 대응할수록 더 살아남아야 한다 (실력이 통해야 한다)`);
-  assert(r.탈출코인 >= 25, `${kind}: 탈출 보너스 코인이 지급되어야 한다`);
+  assert(afkCaught === afkTotal, `가만히 있으면 항상 잡혀야 한다 (${r.afk잡힘})`);
+  assert(esc / escTotal >= 0.55, `계속 피하면 절반 이상 살아남아야 한다 (${r.회피탈출})`);
+  assert(sk / skTotal >= 0.85, `달려들 때 비키면 거의 살아야 한다 (${r.능숙탈출})`);
+  assert(sk > esc, `잘 대응할수록 더 살아남아야 한다 (실력이 통해야 한다)`);
+  assert(r.탈출코인 >= 25, `탈출 보너스 코인이 지급되어야 한다`);
 }
 // --- 밸런스 외 동작 검증 ---
 const checks = JSON.parse(run(`
   (() => {
     const out = {};
 
-    // 추격이 끝나면 다음 추격이 예약되어 반복 등장한다
+    // 보행자가 접근하는 동안 옆으로 얼마나 새는가.
+    // 이 값이 한 차선(60px)을 크게 넘으면 "빈 곳을 보고 꺾었더니 거기로 걸어오는" 상황이 되어
+    // 예측 자체가 불가능해진다. 걷는 속도를 올릴 때 반드시 같이 확인해야 하는 수치다.
     setupRun();
-    let chases = 0, seen = false;
-    for (let f = 0; f < 6000; f++) {
-      update(1.0);
-      if (chaser && !seen) { seen = true; chases++; }
-      if (!chaser) seen = false;
-      if (lives < 90) lives = 99; // 잡혀도 계속 굴려서 반복 등장만 본다
+    let worstDrift = 0;
+    for (const speed of [BASE_SPEED, 8, MAX_SPEED]) {
+      const frames = (car.y - SPAWN_TOP) / speed;
+      worstDrift = Math.max(worstDrift, CROSSER_SPEED_MAX * frames);
     }
-    out.repeatChases = chases;
+    out.worstCrosserDrift = Math.round(worstDrift);
+
+    // 아무것도 치지 않으면 아무리 오래 달려도 추격은 시작되지 않는다.
+    // (주기적으로 터지던 예전 방식이 완전히 빠졌는지 확인하는 핵심 검증)
+    setupRun();
+    let neverChased = true;
+    for (let f = 0; f < 12000; f++) {
+      // 사람/동물이 스폰되면 치기 전에 치워서 "사고 없는 주행"을 만든다
+      obstacles = obstacles.filter(o => !o.crossing);
+      update(1.0);
+      if (lives < 90) lives = 99;
+      if (chaser) { neverChased = false; break; }
+    }
+    out.noChaseWithoutHit = neverChased;
+
+    // 길 건너는 사람/동물을 치면 그 자리에서 경찰이 붙는다
+    setupRun();
+    const livesAtHit = lives;
+    obstacles.length = 0;
+    pushCrosser('walker', true);
+    obstacles[0].x = car.x;      // 플레이어 바로 앞으로 옮겨 반드시 부딪히게 한다
+    obstacles[0].y = car.y - 10;
+    obstacles[0].vx = 0;
+    update(1.0);
+    out.hitCrosserStartsChase = chaser !== null;
+    out.hitCrosserKeepsLife = lives === livesAtHit; // 라이프 대신 추격이 벌이다
+
+    // 부스터 중에도 사람을 치면 그냥 지나갈 수 없다
+    setupRun();
+    obstacles.length = 0;
+    boosterTime = 600;
+    pushCrosser('critter', true);
+    obstacles[0].x = car.x;
+    obstacles[0].y = car.y - 10;
+    obstacles[0].vx = 0;
+    update(1.0);
+    out.boosterCannotRunOver = chaser !== null;
+    boosterTime = 0;
 
     // 보호막은 한 번 막아주고 추격은 계속된다
     setupRun();
-    while (!chaser) update(1.0);
+    startChase();
     activeShield = true;
     let livesBefore = lives;
     while (chaser && activeShield) update(1.0);
@@ -217,43 +236,44 @@ const checks = JSON.parse(run(`
 
     // 부스터로 들이받으면 탈출 처리된다
     setupRun();
-    while (!chaser) update(1.0);
+    startChase();
     const coinsBefore = runStats.coins;
     boosterTime = 600;
     let guard = 0;
     while (chaser && guard++ < 900) update(1.0);
     out.boosterEscape = (chaser === null && runStats.coins > coinsBefore);
+    boosterTime = 0;
 
     // 마지막 하트일 때 잡히면 정상적으로 게임오버로 이어진다
     setupRun();
-    while (!chaser) update(1.0);
+    startChase();
     lives = 1;
     guard = 0;
     while (gameState === 'PLAYING' && guard++ < 2000) update(1.0);
     out.gameOverOnCatch = (gameState === 'GAMEOVER' && chaser === null);
 
-    // 추격자가 장애물을 들이받으면 주춤한다 (뒤에서 쫓기는 플레이어의 유일한 반격 수단)
-    let stunned = 0, obstaclesHit = 0;
-    for (let t = 0; t < 20 && stunned === 0; t++) {
-      setupRun('truck', true);
-      lives = 999; // 플레이어가 장애물에 먼저 죽어 관측이 끊기지 않게 한다
-      let f = 0;
-      while (chaser === null && f < 1200) { update(1.0); f++; }
+    // 추격자가 장애물을 들이받으면 주춤한다 (뒤에서 쫓기는 플레이어의 반격 수단).
+    // 플레이어를 무적으로 두는 이유: 안 그러면 장애물이 플레이어에게 먼저 부딪혀 사라지는 바람에
+    // 추격자까지 내려가는 장애물이 없어 검사 자체가 들쭉날쭉해진다.
+    let stunned = 0;
+    for (let t = 0; t < 12 && stunned === 0; t++) {
+      setupRun(true);
+      lives = 999;
+      startChase();
       let wasStunned = false;
       for (let i = 0; i < CHASE_DURATION && chaser; i++) {
-        const before = obstacles.length;
+        invincibleTime = 999; // 장애물이 플레이어를 통과해 추격자까지 내려가게 한다
         update(1.0);
         if (chaser && chaser.stun > 0 && !wasStunned) { stunned++; wasStunned = true; }
         if (chaser && chaser.stun <= 0) wasStunned = false;
-        if (obstacles.length < before) obstaclesHit++;
       }
     }
+    invincibleTime = 0;
     out.chaserStunnedByObstacle = stunned > 0;
 
     // 추격 중에는 옆으로 빠질 길이 없는 패턴을 뽑지 않는다
     setupRun();
-    spawnPattern = function () { spawnTimer = -99999; };
-    while (!chaser) update(1.0);
+    startChase();
     level = 9;
     const picked = new Set();
     for (let i = 0; i < 500; i++) picked.add(pickPattern().name);
@@ -265,7 +285,12 @@ const checks = JSON.parse(run(`
 `));
 
 console.log('\n동작 검증:', JSON.stringify(checks, null, 2));
-assert(checks.repeatChases >= 2, '추격은 일정 거리마다 반복 등장해야 한다');
+assert(checks.worstCrosserDrift <= 90,
+  `보행자가 다가오는 동안의 가로 이동이 한 차선(60px) 언저리여야 예측이 가능하다 (${checks.worstCrosserDrift}px)`);
+assert(checks.noChaseWithoutHit, '아무것도 치지 않으면 추격이 시작되지 않아야 한다');
+assert(checks.hitCrosserStartsChase, '사람/동물을 치면 경찰이 붙어야 한다');
+assert(checks.hitCrosserKeepsLife, '치었을 때 라이프 대신 추격이 벌이어야 한다');
+assert(checks.boosterCannotRunOver, '부스터 중에도 치고 그냥 지나갈 수 없어야 한다');
 assert(checks.shieldBlocked, '보호막이 한 번 막아주고 추격은 이어져야 한다');
 assert(checks.boosterEscape, '부스터로 들이받으면 탈출 처리되어야 한다');
 assert(checks.gameOverOnCatch, '마지막 하트에 잡히면 게임오버로 이어져야 한다');

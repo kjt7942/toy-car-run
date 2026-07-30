@@ -15,11 +15,6 @@ const heartContainer = document.getElementById('heartContainer');
 const touchControls = document.getElementById('touchControls');
 const touchLeft = document.getElementById('touchLeft');
 const touchRight = document.getElementById('touchRight');
-const controlBtn = document.getElementById('controlBtn');
-const ctrlHint = document.getElementById('ctrlHint');
-const dragSensRow = document.getElementById('dragSensRow');
-const dragSens = document.getElementById('dragSens');
-const dragSensVal = document.getElementById('dragSensVal');
 
 // 콤보 및 아이템 상태 표시 엘리먼트
 const levelVal = document.getElementById('levelVal');
@@ -92,8 +87,6 @@ function defaultSave() {
     unlocked: ['classic'],
     selected: 'classic',
     muted: false,
-    control: 'buttons',  // 'buttons' | 'drag'
-    dragSens: 7,         // 1(느긋) ~ 15(예민)
     daily: { date: '', best: 0 }   // 오늘의 도전 기록 (날짜가 바뀌면 초기화)
   };
 }
@@ -108,9 +101,10 @@ function loadSave() {
       if (!Array.isArray(merged.scores)) merged.scores = [];
       if (!Array.isArray(merged.unlocked) || merged.unlocked.length === 0) merged.unlocked = ['classic'];
       if (!merged.achievements || typeof merged.achievements !== 'object') merged.achievements = {};
-      // 감도가 깨져 있으면 조향이 아예 먹통이 되므로 범위를 강제한다
-      if (!(merged.dragSens >= 1 && merged.dragSens <= 15)) merged.dragSens = 7;
       if (!merged.daily || typeof merged.daily !== 'object') merged.daily = { date: '', best: 0 };
+      // 드래그 조작을 걷어내면서 쓰지 않게 된 항목. 남아 있어도 무해하지만 저장값을 깨끗이 둔다.
+      delete merged.control;
+      delete merged.dragSens;
       return merged;
     }
   } catch (e) {
@@ -309,27 +303,23 @@ let lastStandTime = 0;
 const LAST_STAND_DURATION = 55;
 const LAST_STAND_FACTOR = 0.4;
 
-// --- [돌발 추격전] ---
-// 가만히 한 자리를 지키면 안전해지는 구간이 생기지 않도록, 일정 거리마다 추격자가 뒤에서 붙는다.
+// --- [경찰 추격전] ---
+// 정해진 거리마다 터지면 "왜 하필 지금"이 없어서 그냥 난이도 스파이크로 느껴진다.
+// 그래서 길 건너는 사람이나 동물을 치었을 때만 경찰이 붙는다. 원인이 내 실수라서 납득이 되고,
+// 무엇보다 잘 피하면 추격 자체가 일어나지 않는다.
 // 15초를 버티면 코인 보너스, 잡히면 하트 1개.
+//
 // 추격자의 좌우 속도는 플레이어보다 느려야 한다. 여기서 기준은 car.maxVx(7.2)가 아니라
 // 마찰까지 반영한 실제 순항 속도다: vx는 (vx + acc) * friction 으로 수렴하므로
 // 0.95 * 0.8 / (1 - 0.8) ≈ 3.8px/프레임이 플레이어가 실제로 낼 수 있는 좌우 속도다.
 // maxVx를 이 값 밑으로 유지해야 "계속 도망치면 떼어낼 수 있다"가 성립한다. 난이도 조절 지점.
-const CHASE_DURATION = 900;         // 15초 (60fps 기준)
-const CHASE_FIRST_DISTANCE = 9000;  // 첫 추격이 붙는 주행 거리
-const CHASE_INTERVAL = 16000;       // 추격이 끝난 뒤 다음 추격까지의 거리
+const CHASE_DURATION = 900;  // 15초 (60fps 기준)
 const CHASE_ESCAPE_COINS = 25;
 const CHASE_ESCAPE_SCORE = 1200;
 const CHASE_STUN = 70; // 장애물을 들이받은 추격자가 주춤하는 시간 (약 1.2초)
 // maxVx = 좌우 최고 속도(위 3.8보다 낮아야 도망칠 수 있다), grip = 그 속도에 붙는 민첩함
-const CHASE_TYPES = [
-  { id: 'police', name: '경찰차',     icon: '🚓', maxVx: 2.9, grip: 0.09, w: 38, h: 60 },
-  // 트럭이 너무 넓으면 벽에 몰린 플레이어가 옆으로 건널 틈 자체가 사라진다(도로 폭 240).
-  { id: 'truck',  name: '몬스터 트럭', icon: '🚚', maxVx: 2.0, grip: 0.06, w: 50, h: 66 }
-];
-let chaser = null;                  // 추격 중이 아니면 null
-let nextChaseDistance = CHASE_FIRST_DISTANCE;
+const POLICE = { id: 'police', name: '경찰차', icon: '🚓', maxVx: 2.9, grip: 0.09, w: 38, h: 60 };
+let chaser = null;           // 추격 중이 아니면 null
 let sirenTimer = 0;
 
 // 화면 방해 오일 효과 리스트
@@ -711,92 +701,16 @@ touchRight.addEventListener('mousedown', (e) => {
 touchRight.addEventListener('mouseup', () => touchRightPressed = false);
 touchRight.addEventListener('mouseleave', () => touchRightPressed = false);
 
-// 4. 드래그 조작 (옵션)
-// 버튼을 정확히 눌러야 하는 부담 없이 화면 아무 곳이나 잡고 좌우로 밀어 조향한다.
-// 물리는 그대로 두고 기존 두 플래그만 세팅해 두 조작법이 같은 코드를 쓰게 한다.
-// 방향만 넘기는 가상 조이스틱은 반경만큼 되밀어야 방향이 바뀌어 늘 한 박자 늦었다.
-// 대신 손가락이 움직인 만큼 차를 그 자리로 끌어당긴다. 손가락과 차가 1:1로 붙어 움직여
-// "어디까지 밀어야 도는지" 감을 잡을 필요가 없다.
-// 감도는 손가락 이동량 대비 차가 따라오는 비율이다.
-let dragGain = 1.5;
-let dragPower = 1;        // 11 이상 구간에서만 쓰는 조향 가속 배수
-let dragTargetX = null;   // 차가 가야 할 게임 좌표. null이면 드래그 조작 중이 아님
-let dragAnchorX = 0;      // 손가락을 처음 댄 화면 좌표
-let dragAnchorCarX = 0;   // 그때의 차 위치
-let dragScale = 1;        // 화면 CSS px → 게임 좌표 환산 (기기 해상도 차이 흡수)
+// 4. 조작 안내 가이드
+// 터치 영역은 평소 투명해서 어디를 눌러야 하는지 알 수가 없다.
+// 그래서 판이 시작될 때만 좌우 버튼을 잠깐 띄워 알려주고 스르르 사라지게 한다.
+const TOUCH_GUIDE_MS = 3200;
+let touchGuideTimer = null;
 
-function applyDragSens() {
-  // 최고치 2.0배도 굼뜨다는 실기 피드백을 받아 상한을 15까지 열었다
-  dragGain = 0.4 + save.dragSens * 0.16;   // 감도 1 → 0.56배, 7 → 1.52배, 15 → 2.8배
-
-  // 배율만 키워도 한계가 있다. 차의 실제 가로 최고속도는 마찰(0.80)이 가속(0.95)을 잡아
-  // 프레임당 3.8px에서 멈추므로, 손가락이 아무리 앞서가도 차가 그 속도로만 따라온다.
-  // 11부터는 조향 가속도 같이 올려 그 천장을 밀어 올린다. 10 이하는 기존 감각 그대로 둔다.
-  dragPower = 1 + Math.max(0, save.dragSens - 10) * 0.12;   // 15 → 1.6배 (프레임당 6.1px)
-}
-
-function beginDrag(x) {
-  dragAnchorX = x;
-  dragAnchorCarX = car.x;
-  dragTargetX = car.x;
-  dragScale = GAME_WIDTH / (canvas.getBoundingClientRect().width || GAME_WIDTH);
-}
-
-function moveDrag(x) {
-  const left = roadX + car.width / 2;
-  const right = roadX + roadWidth - car.width / 2;
-  let target = dragAnchorCarX + (x - dragAnchorX) * dragScale * dragGain;
-
-  // 도로 밖까지 밀어붙였을 때 기준점을 다시 잡지 않으면, 되돌릴 때 그 초과분만큼
-  // 손가락만 움직이고 차는 가만히 있는 먹통 구간이 생긴다.
-  if (target < left || target > right) {
-    target = Math.min(Math.max(target, left), right);
-    dragAnchorX = x;
-    dragAnchorCarX = target;
-  }
-  dragTargetX = target;
-}
-
-touchControls.addEventListener('touchstart', (e) => {
-  if (save.control !== 'drag') return;
-  e.preventDefault();
-  isTouchDevice = true;
-  beginDrag(e.touches[0].clientX);
-}, { passive: false });
-
-touchControls.addEventListener('touchmove', (e) => {
-  if (save.control !== 'drag') return;
-  e.preventDefault();
-  moveDrag(e.touches[0].clientX);
-}, { passive: false });
-
-function endDrag(e) {
-  if (save.control !== 'drag') return;
-  e.preventDefault();
-  dragTargetX = null;
-  touchLeftPressed = touchRightPressed = false;
-}
-touchControls.addEventListener('touchend', endDrag, { passive: false });
-touchControls.addEventListener('touchcancel', endDrag, { passive: false });
-
-function updateControlButton() {
-  const drag = save.control === 'drag';
-  touchControls.classList.toggle('drag-mode', drag);
-  if (controlBtn) controlBtn.textContent = drag ? '📱 조작: 드래그' : '📱 조작: 버튼';
-  if (ctrlHint) ctrlHint.textContent = drag ? '화면을 잡고 좌우로 밀기' : '하단 좌/우 영역 터치';
-  // 감도는 드래그를 쓸 때만 의미가 있으니 그때만 노출한다
-  if (dragSensRow) dragSensRow.classList.toggle('hidden', !drag);
-  if (dragSens) dragSens.value = save.dragSens;
-  if (dragSensVal) dragSensVal.textContent = save.dragSens;
-  applyDragSens();
-}
-
-if (dragSens) {
-  dragSens.addEventListener('input', () => {
-    save.dragSens = parseInt(dragSens.value, 10);
-    persistSave();
-    updateControlButton();
-  });
+function showTouchGuide() {
+  touchControls.classList.add('guide');
+  clearTimeout(touchGuideTimer);
+  touchGuideTimer = setTimeout(() => touchControls.classList.remove('guide'), TOUCH_GUIDE_MS);
 }
 
 
@@ -1318,7 +1232,183 @@ function drawTrafficCar(ctx, x, y, w, h) {
   ctx.restore();
 }
 
-// 추격자 렌더링. 경찰차는 번쩍이는 경광등, 몬스터 트럭은 거대한 바퀴로 한눈에 구분된다.
+// 길 건너는 보행자/동물. 치면 안 되는 대상이라 장애물과 확실히 달라 보여야 한다.
+// 진행 방향으로 몸을 돌리고 팔다리를 종종거리며, 머리 위 경고 방울로 "건너는 중"을 알린다.
+function drawCrosser(ctx, obs) {
+  const w = obs.width;
+  const h = obs.height;
+  const dir = obs.vx >= 0 ? 1 : -1;   // 걸어가는 방향 (스프라이트가 이쪽을 본다)
+  const swing = Math.sin(obs.step) * 3.2;
+
+  ctx.save();
+  ctx.translate(obs.x, obs.y);
+
+  // 바닥 그림자. 진하면 발과 뭉쳐서 검은 덩어리로 보이므로 옅고 얇게 깐다.
+  ctx.fillStyle = 'rgba(0,0,0,0.13)';
+  ctx.beginPath();
+  ctx.ellipse(0, h / 2 + 2.5, w / 2 - 3, 2, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+
+  if (obs.type === 'critter') {
+    drawCritterBody(ctx, w, h, dir, swing, obs.tone);
+  } else {
+    drawWalkerBody(ctx, w, h, dir, swing, obs.tone);
+  }
+
+  // 머리 위 경고 방울
+  ctx.fillStyle = '#FFDE59';
+  ctx.strokeStyle = '#2F3640';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(0, -h / 2 - 11, 8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#E01E1E';
+  ctx.beginPath();
+  ctx.roundRect(-1.5, -h / 2 - 16, 3, 6, 1.5);
+  ctx.arc(0, -h / 2 - 7.5, 1.6, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+// 보행자: 머리 · 몸통 · 흔들리는 팔다리
+function drawWalkerBody(ctx, w, h, dir, swing, tone) {
+  const outline = '#2F3640';
+  const skin = '#FFE0BD';
+  const headR = 7.5;
+  const headY = -h / 2 + headR + 1;
+  const bodyTop = headY + headR - 1;
+  const bodyH = h / 2 + 1;
+
+  // 뒤쪽 다리 → 몸통 → 앞쪽 다리 순으로 그려야 겹침이 자연스럽다
+  ctx.strokeStyle = outline;
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(-2, bodyTop + bodyH - 3);
+  ctx.lineTo(-2 - swing, h / 2 - 1);
+  ctx.stroke();
+
+  // 몸통 (옷)
+  ctx.fillStyle = tone || '#74B9FF';
+  ctx.strokeStyle = outline;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.roundRect(-w / 2 + 3, bodyTop, w - 6, bodyH, 5);
+  ctx.fill();
+  ctx.stroke();
+
+  // 흔들리는 팔 (다리와 반대 위상)
+  ctx.strokeStyle = outline;
+  ctx.lineWidth = 3.5;
+  ctx.beginPath();
+  ctx.moveTo(dir * (w / 2 - 4), bodyTop + 4);
+  ctx.lineTo(dir * (w / 2 - 4) + swing * 0.8, bodyTop + 12);
+  ctx.stroke();
+
+  // 앞쪽 다리 + 신발 (신발이 크면 그림자와 뭉쳐 발이 안 보인다)
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(3, bodyTop + bodyH - 3);
+  ctx.lineTo(3 + swing, h / 2 - 1);
+  ctx.stroke();
+  ctx.fillStyle = '#3D5AFE';
+  ctx.beginPath();
+  ctx.ellipse(3 + swing + dir * 1.2, h / 2, 2.6, 1.6, 0, 0, Math.PI * 2);
+  ctx.ellipse(-2 - swing + dir * 1.2, h / 2, 2.6, 1.6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 머리
+  ctx.fillStyle = skin;
+  ctx.strokeStyle = outline;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.arc(0, headY, headR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // 머리카락 (윗부분을 덮는 반원)
+  ctx.fillStyle = '#4A3728';
+  ctx.beginPath();
+  ctx.arc(0, headY, headR, Math.PI * 1.08, Math.PI * 2.02);
+  ctx.fill();
+
+  // 진행 방향을 보는 눈
+  ctx.fillStyle = outline;
+  ctx.beginPath();
+  ctx.arc(dir * 2.6, headY + 1.5, 1.5, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// 동물: 통통한 몸통 · 쫑긋한 귀 · 살랑이는 꼬리
+function drawCritterBody(ctx, w, h, dir, swing, tone) {
+  const outline = '#2F3640';
+  const fur = tone || '#FDCB6E';
+  const headX = dir * (w / 2 - 6);
+
+  // 꼬리 (진행 반대쪽에서 살랑살랑). 굵으면 다리 하나가 더 달린 것처럼 보인다.
+  ctx.strokeStyle = outline;
+  ctx.lineWidth = 2.2;
+  ctx.beginPath();
+  ctx.moveTo(-dir * (w / 2 - 5), -1);
+  ctx.quadraticCurveTo(
+    -dir * (w / 2 + 1), -4 + swing * 0.6,
+    -dir * (w / 2 - 1), -10 + swing * 0.6
+  );
+  ctx.stroke();
+
+  // 다리. 몸통 밖으로 벌어지면 거미처럼 보이므로 짧고 곧게, 몸통 폭 안쪽에 붙인다.
+  ctx.lineWidth = 2.8;
+  ctx.beginPath();
+  ctx.moveTo(-4, h / 2 - 7); ctx.lineTo(-4 - swing * 0.5, h / 2 - 1);
+  ctx.moveTo(4, h / 2 - 7);  ctx.lineTo(4 + swing * 0.5, h / 2 - 1);
+  ctx.stroke();
+
+  // 몸통
+  ctx.fillStyle = fur;
+  ctx.strokeStyle = outline;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.ellipse(-dir * 2, 0, w / 2 - 3, h / 2 - 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // 머리
+  ctx.beginPath();
+  ctx.arc(headX, -2, 7, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // 쫑긋한 귀 두 개
+  ctx.beginPath();
+  ctx.moveTo(headX - 4.5, -7);
+  ctx.lineTo(headX - 5.5, -14);
+  ctx.lineTo(headX - 0.5, -8.5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(headX + 4.5, -7);
+  ctx.lineTo(headX + 5.5, -14);
+  ctx.lineTo(headX + 0.5, -8.5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // 눈과 코
+  ctx.fillStyle = outline;
+  ctx.beginPath();
+  ctx.arc(headX + dir * 1.5, -3.5, 1.6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(headX + dir * 5.5, 0, 1.8, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// 추격자 렌더링. 번쩍이는 경광등으로 화면 아래 어두운 쪽에서도 알아볼 수 있게 한다.
 function drawChaser(ctx, c) {
   const w = c.kind.w;
   const h = c.kind.h;
@@ -1339,36 +1429,7 @@ function drawChaser(ctx, c) {
   ctx.strokeStyle = '#2F3640';
   ctx.lineWidth = 3;
 
-  if (c.kind.id === 'truck') {
-    // 몬스터 트럭: 도로를 넓게 틀어막는 거구
-    ctx.fillStyle = '#2F3640';
-    ctx.beginPath();
-    ctx.arc(-w / 2 + 3, -h / 2 + 20, 13, 0, Math.PI * 2);
-    ctx.arc(w / 2 - 3, -h / 2 + 20, 13, 0, Math.PI * 2);
-    ctx.arc(-w / 2 + 3, h / 2 - 18, 13, 0, Math.PI * 2);
-    ctx.arc(w / 2 - 3, h / 2 - 18, 13, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = '#E17055';
-    ctx.beginPath();
-    ctx.roundRect(-w / 2 + 6, -h / 2, w - 12, h, 10);
-    ctx.fill();
-    ctx.stroke();
-
-    // 앞으로 튀어나온 범퍼 (플레이어를 향한 쪽)
-    ctx.fillStyle = '#B2BEC3';
-    ctx.beginPath();
-    ctx.roundRect(-w / 2 + 2, h / 2 - 12, w - 4, 11, 4);
-    ctx.fill();
-    ctx.stroke();
-
-    // 유리창
-    ctx.fillStyle = '#636E72';
-    ctx.beginPath();
-    ctx.roundRect(-w / 2 + 12, h / 6, w - 24, 14, 4);
-    ctx.fill();
-    ctx.stroke();
-  } else {
+  {
     // 경찰차: 흑백 투톤 바디
     ctx.fillStyle = '#F5F6FA';
     ctx.beginPath();
@@ -1388,11 +1449,9 @@ function drawChaser(ctx, c) {
     ctx.stroke();
   }
 
-  // 경광등. 경찰차는 빨강/파랑, 트럭은 공사장 노란 경고등으로 번쩍인다.
+  // 빨강/파랑이 번갈아 번쩍이는 경광등.
   // 화면 아래쪽은 터치 버튼과 겹쳐 어두우므로, 이 불빛이 추격자를 알아보는 주된 단서가 된다.
-  const beacon = c.kind.id === 'truck'
-    ? (blink ? '#FFC312' : '#FF9F1A')
-    : (blink ? '#FF3B3B' : '#3B7BFF');
+  const beacon = blink ? '#FF3B3B' : '#3B7BFF';
   ctx.fillStyle = beacon;
   ctx.beginPath();
   ctx.roundRect(-11, -h / 2 - 6, 22, 9, 4);
@@ -1973,8 +2032,7 @@ function startGame(daily = false) {
   revivedThisRun = false;
   preGameOverSave = null;
 
-  // 이전 판에서 손가락을 뗀 위치가 남아 있으면 새 판 시작하자마자 차가 그리로 튄다
-  dragTargetX = null;
+  // 이전 판에서 누르고 있던 상태가 남으면 새 판 시작하자마자 차가 그쪽으로 쏠린다
   touchLeftPressed = touchRightPressed = false;
 
   combo = 0;
@@ -1985,7 +2043,6 @@ function startGame(daily = false) {
   spawnTimer = 0;
   spawnInterval = 70;
   chaser = null;
-  nextChaseDistance = CHASE_FIRST_DISTANCE;
 
   runStats = { coins: 0, destroyed: 0, damage: 0, maxMult: 1, nearMisses: 0 };
   recordBeaten = false;
@@ -2020,6 +2077,9 @@ function startGame(daily = false) {
 
   startScreen.classList.remove('active');
   gameOverScreen.classList.remove('active');
+
+  // 터치 영역은 평소 보이지 않으므로, 판이 시작될 때만 좌우 버튼을 띄워 조작법을 알려준다
+  showTouchGuide();
 
   // 오늘 어떤 규칙으로 달리는지 판 시작에 한 번 알려 준다
   if (activeMod) {
@@ -2063,7 +2123,6 @@ function doRevive() {
 
   // 추격에 잡혀서 끝난 판이라면 살아나자마자 다시 잡히지 않도록 추격을 풀어준다
   chaser = null;
-  nextChaseDistance = distance + CHASE_INTERVAL;
 
   startBgm();
   playSound('heal');
@@ -2183,7 +2242,21 @@ function evaluateAchievements(finalScoreValue) {
 // 충돌 처리 (보호막 유무 판정)
 function handleCollision(obsIndex) {
   const obs = obstacles[obsIndex];
-  
+
+  // 길 건너던 사람/동물을 친 경우. 라이프는 깎이지 않지만 경찰이 붙는다.
+  // 부스터나 보호막보다 먼저 판정한다 — 어떤 아이템으로도 그냥 치고 지나갈 수는 없어야 한다.
+  if (obs.crossing) {
+    obstacles.splice(obsIndex, 1);
+    playSound('crash');
+    createCrashParticles(obs.x, obs.y, '#FFEAA7');
+    addFloatingText(obs.x, obs.y - 20, '앗, 놀랐잖아! 💢', '#FF5757');
+    resetCombo();
+    shakeTime = 16;
+    shakeAmount = 7;
+    startChase();
+    return;
+  }
+
   // 오일통과 웅덩이는 라이프를 깎지 않는 방해형 함정.
   // 오일은 시야를, 웅덩이는 조작을 망가뜨린다.
   if (obs.type === 'oildrum' || obs.type === 'puddle') {
@@ -2269,12 +2342,19 @@ function takeDamage(label = "앗!!") {
   }
 }
 
-// --- [돌발 추격전 로직] ---
+// --- [경찰 추격전 로직] ---
 
+// 길 건너던 사람이나 동물을 쳤을 때만 호출된다. 이미 쫓기는 중이면 시간이 처음으로 되돌아간다.
 function startChase() {
-  const kind = CHASE_TYPES[Math.floor(Math.random() * CHASE_TYPES.length)];
+  if (chaser) {
+    chaser.time = CHASE_DURATION;
+    addFloatingText(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 40, '또 쳤다! 15초 처음부터!', '#FF5757');
+    playSound('siren');
+    return;
+  }
+
   chaser = {
-    kind: kind,
+    kind: POLICE,
     x: car.x,
     y: GAME_HEIGHT + 60, // 화면 아래(플레이어 뒤)에서 밀고 올라온다
     vx: 0,
@@ -2286,14 +2366,13 @@ function startChase() {
   playSound('siren');
   shakeTime = 16;
   shakeAmount = 5;
-  addFloatingText(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 60, `${kind.icon} ${kind.name} 출동!`, '#FF5757');
+  addFloatingText(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 60, '🚓 경찰 출동!', '#FF5757');
   addFloatingText(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 20, '15초만 버텨!', '#FFDE59');
 }
 
 function endChase(escaped) {
   if (!chaser) return;
   chaser = null;
-  nextChaseDistance = distance + CHASE_INTERVAL;
   if (!escaped) return;
 
   runStats.coins += CHASE_ESCAPE_COINS;
@@ -2307,10 +2386,7 @@ function endChase(escaped) {
 }
 
 function updateChase(dt) {
-  if (!chaser) {
-    if (distance >= nextChaseDistance) startChase();
-    return;
-  }
+  if (!chaser) return; // 추격은 사람/동물을 쳤을 때만 시작된다 (startChase 호출부 참고)
 
   const c = chaser;
   c.time -= dt;
@@ -2490,8 +2566,43 @@ const OBSTACLE_SPECS = {
   barrier: { w: 62, h: 34 },
   oildrum: { w: 26, h: 38 },
   puddle:  { w: 54, h: 26 },
-  car:     { w: 34, h: 56 }
+  car:     { w: 34, h: 56 },
+  // 길을 건너는 보행자와 동물. 치면 라이프 대신 경찰 추격이 붙는다.
+  walker:  { w: 22, h: 30 },
+  critter: { w: 26, h: 22 }
 };
+
+// 옷·털 색을 몇 가지 돌려써서 매번 같은 사람이 나오는 느낌을 없앤다
+const WALKER_TONES = ['#74B9FF', '#FF7675', '#55EFC4', '#FD79A8', '#A29BFE'];
+const CRITTER_TONES = ['#FDCB6E', '#E17055', '#DFE6E9', '#B2BEC3'];
+
+// 걷는 속도. 옆으로 움직이는 장애물은 "지금 위치"가 아니라 "부딪힐 때 위치"를 예측해야 해서,
+// 빠르면 빈 곳을 보고 꺾은 순간 그리로 걸어와 버린다. 화면 위에서 플레이어 앞까지 내려오는
+// 동안의 가로 이동이 한 차선(약 60px)을 넘지 않도록 잡은 값이다. 난이도 조절 지점.
+const CROSSER_SPEED_MIN = 0.4;
+const CROSSER_SPEED_MAX = 0.75;
+
+// 건너는 대상은 도로 가장자리에서 출발해 반대편으로 걸어간다.
+// 다른 장애물과 달리 도로 벽에 튕기지 않고 화면 밖으로 걸어 나가야 하므로 crossing 표식을 단다.
+function pushCrosser(type, fromLeft, dy = 0) {
+  const spec = OBSTACLE_SPECS[type];
+  const tones = type === 'critter' ? CRITTER_TONES : WALKER_TONES;
+  const speed = CROSSER_SPEED_MIN + Math.random() * (CROSSER_SPEED_MAX - CROSSER_SPEED_MIN);
+  obstacles.push({
+    x: fromLeft ? roadX - spec.w : roadX + roadWidth + spec.w,
+    y: SPAWN_TOP - dy,
+    width: spec.w,
+    height: spec.h,
+    type: type,
+    scored: false,
+    speedMul: 1,
+    vx: (fromLeft ? 1 : -1) * speed,
+    crossing: true,
+    step: Math.random() * Math.PI * 2,          // 걷는 애니메이션 위상
+    tone: tones[Math.floor(Math.random() * tones.length)]
+  });
+  if (dy > patternDepth) patternDepth = dy;
+}
 
 const SPAWN_TOP = -46;
 let patternDepth = 0; // 현재 패턴이 세로로 차지하는 길이 (다음 스폰 간격 계산용)
@@ -2685,6 +2796,19 @@ const PATTERNS = [
     }
   },
   {
+    // 횡단: 사람이나 동물이 길을 건넌다. 치면 경찰 추격이 시작되므로 반드시 비켜줘야 한다.
+    // 부수는 대상이 아니라 "지나갈 때까지 기다리는" 대상이라 다른 패턴과 결이 다르다.
+    name: 'crossing', minLevel: 3, weight: 10, growth: 0.03,
+    build() {
+      const fromLeft = Math.random() < 0.5;
+      pushCrosser(Math.random() < 0.5 ? 'walker' : 'critter', fromLeft);
+      // 가끔 둘이 나란히 건너 길을 더 넓게 막는다
+      if (Math.random() < 0.35) {
+        pushCrosser(Math.random() < 0.5 ? 'walker' : 'critter', fromLeft, 40);
+      }
+    }
+  },
+  {
     // 보급: 파워업 하나와 코인 몇 개
     name: 'powerup', minLevel: 1, weight: 15, growth: -0.02,
     build() {
@@ -2706,8 +2830,9 @@ function patternWeight(p) {
 }
 
 // 추격 중에는 좌우로 계속 피해 다녀야 하므로, 옆으로 빠질 길이 거의 없는 패턴이 겹치면
-// 피할 방법이 없는 죽음이 된다. 추격 중에만 이 둘을 후보에서 뺀다.
-const CHASE_BANNED_PATTERNS = ['gauntlet', 'funnel'];
+// 피할 방법이 없는 죽음이 된다. crossing도 함께 뺀다 — 경찰을 피하느라 정신없는 와중에
+// 보행자까지 나오면 실수로 치고 타이머가 처음으로 돌아가는 이중 처벌이 된다.
+const CHASE_BANNED_PATTERNS = ['gauntlet', 'funnel', 'crossing'];
 
 // 현재 레벨에서 뽑을 수 있는 패턴 중 가중치에 따라 하나를 고른다
 function pickPattern() {
@@ -2821,13 +2946,7 @@ function update(dt = 1.0) {
   const frictionNow = isSlippery ? SLIPPERY_FRICTION : car.friction;
 
   const moveSpeedModifier = dt;
-  if (dragTargetX !== null) {
-    // 손가락이 가리키는 자리로 끌어당긴다. 가까워질수록 힘을 빼서 목표 주변에서 떨지 않게 한다.
-    // 감속 구간이 넓으면 한 차선 정도의 짧은 보정이 통째로 물러진다. 5px까지만 힘을 뺀다.
-    const pull = Math.max(-1, Math.min(1, (dragTargetX - car.x) / 5));
-    car.vx += accNow * dragPower * pull * moveSpeedModifier;
-    car.angle += (pull * 0.16 - car.angle) * Math.min(1, 0.25 * moveSpeedModifier);
-  } else if (keys['ArrowLeft'] || keys['a'] || keys['A'] || touchLeftPressed) {
+  if (keys['ArrowLeft'] || keys['a'] || keys['A'] || touchLeftPressed) {
     car.vx -= accNow * moveSpeedModifier;
     car.angle = Math.max(car.angle - 0.035 * moveSpeedModifier, -0.16);
   } else if (keys['ArrowRight'] || keys['d'] || keys['D'] || touchRightPressed) {
@@ -3035,13 +3154,19 @@ function update(dt = 1.0) {
 
     if (obs.vx) {
       obs.x += obs.vx * dt;
-      const minX = roadX + obs.width / 2;
-      const maxX = roadX + roadWidth - obs.width / 2;
-      if (obs.x < minX) { obs.x = minX; obs.vx *= -1; }
-      if (obs.x > maxX) { obs.x = maxX; obs.vx *= -1; }
+      if (obs.crossing) {
+        // 건너는 중인 사람/동물은 도로 벽에 튕기지 않고 그대로 건너편으로 걸어 나간다
+        obs.step += 0.22 * dt;
+      } else {
+        const minX = roadX + obs.width / 2;
+        const maxX = roadX + roadWidth - obs.width / 2;
+        if (obs.x < minX) { obs.x = minX; obs.vx *= -1; }
+        if (obs.x > maxX) { obs.x = maxX; obs.vx *= -1; }
+      }
     }
 
-    if (obs.y > GAME_HEIGHT + 30) {
+    if (obs.y > GAME_HEIGHT + 30 ||
+        (obs.crossing && (obs.x < -50 || obs.x > GAME_WIDTH + 50))) {
       obstacles.splice(i, 1);
       continue;
     }
@@ -3226,6 +3351,8 @@ function draw() {
       drawOilDrum(ctx, obs.x, obs.y, obs.width, obs.height);
     } else if (obs.type === 'car') {
       drawTrafficCar(ctx, obs.x, obs.y, obs.width, obs.height);
+    } else if (obs.type === 'walker' || obs.type === 'critter') {
+      drawCrosser(ctx, obs);
     }
   });
 
@@ -3441,12 +3568,6 @@ bindTap(homeBtn, () => {
   startScreen.classList.add('active');
 });
 
-bindTap(controlBtn, () => {
-  save.control = save.control === 'drag' ? 'buttons' : 'drag';
-  persistSave();
-  updateControlButton();
-});
-
 document.querySelectorAll('.close-screen').forEach(btn => {
   bindTap(btn, () => {
     closeScreen(statsScreen);
@@ -3484,7 +3605,6 @@ document.addEventListener('visibilitychange', () => {
 
 resizeCanvas();
 updateMuteButton();
-updateControlButton();
 updateDailyInfo();
 window.addEventListener('resize', resizeCanvas);
 loop((window.performance && window.performance.now) ? window.performance.now() : Date.now());

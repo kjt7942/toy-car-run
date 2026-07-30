@@ -75,24 +75,17 @@
         
         <div class="instructions-box">
           <p>⌨️ <strong>PC 조작:</strong> 방향키 ◀ ▶ 또는 A / D</p>
-          <p>📱 <strong>모바일:</strong> <span id="ctrlHint">하단 좌/우 영역 터치</span></p>
+          <p>📱 <strong>모바일:</strong> 화면 아래 왼쪽 / 오른쪽을 누르기</p>
           <p>🔥 <strong>콤보:</strong> 코인 획득과 아슬아슬 회피로 배수 UP!</p>
           <p>🚪 <strong>게이트:</strong> 황금 문은 코인 2배, 대신 그 뒤가 험난!</p>
-          <p>🚓 <strong>추격전:</strong> 사이렌이 울리면 15초 버티기! 성공하면 코인 왕창</p>
+          <p>🚸 <strong>조심!</strong> 길 건너는 사람·동물을 치면 경찰이 쫓아와요</p>
+          <p>🚓 <strong>추격전:</strong> 15초 버티면 탈출! 장애물로 유인하면 주춤해요</p>
           <p>🔄 <strong>바로 재시작:</strong> Space 또는 Enter</p>
         </div>
 
         <button id="startBtn" class="btn-primary">게임 시작하기!</button>
         <button id="dailyBtn" class="btn-secondary btn-daily">🗓️ 오늘의 도전</button>
         <p id="dailyInfo" class="daily-info"></p>
-        <div class="btn-row">
-          <button id="controlBtn" class="btn-secondary">📱 조작: 버튼</button>
-        </div>
-        <div id="dragSensRow" class="opt-row hidden">
-          <label for="dragSens">🎚️ 감도</label>
-          <input type="range" id="dragSens" min="1" max="15" step="1" value="7">
-          <b id="dragSensVal">7</b>
-        </div>
         <div class="btn-row">
           <button id="statsBtn" class="btn-secondary">🏆 기록</button>
           <button id="garageBtn" class="btn-secondary">🚗 차고</button>
@@ -174,7 +167,8 @@
       </div>
     </div>
 
-    <!-- 3. 모바일 터치 컨트롤 (가상 패널) -->
+    <!-- 3. 모바일 터치 컨트롤 -->
+    <!-- 평소에는 투명해서 화면을 가리지 않고, 판이 시작될 때만 잠깐 나타나 조작법을 알려준다 -->
     <div id="touchControls">
       <div id="touchLeft" class="touch-zone">
         <div class="touch-btn-visual">◀</div>
@@ -182,6 +176,7 @@
       <div id="touchRight" class="touch-zone">
         <div class="touch-btn-visual">▶</div>
       </div>
+      <p class="touch-guide-hint">여기를 눌러 좌우로 피하세요!</p>
     </div>
   </div>
 
