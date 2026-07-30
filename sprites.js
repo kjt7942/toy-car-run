@@ -355,46 +355,122 @@ function drawPlayer() {
   ctx.restore();
 }
 
-// 6) 깔끔하고 쨍한 오렌지 둥근 고깔 콘 (위험 경고 장애물)
+// 6) 참고 이미지(orca-paste) 기반의 3D 아이소메트릭 트래픽 고깔 콘
 function drawCone(ctx, x, y, w, h) {
   ctx.save();
   ctx.translate(x, y);
 
-  // 받침
-  ctx.fillStyle = OUTLINE_COLOR;
+  // 1. 바닥 입체 그림자
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
   ctx.beginPath();
-  ctx.roundRect(-w / 2 - 2, h / 2 - 4, w + 4, 5, 2);
+  ctx.ellipse(0, h / 2 + 1, w * 0.62, 4.5, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = '#FF5E36';
-  ctx.beginPath();
-  ctx.roundRect(-w / 2, h / 2 - 6, w, 4, 2);
-  ctx.fill();
-
-  // 쨍하고 깔끔한 오렌지 삼각 콘 (상단 꼭짓점 둥글게)
-  ctx.fillStyle = '#FF5E36';
-  ctx.beginPath();
-  ctx.moveTo(-w / 2.4, h / 2 - 6);
-  ctx.lineTo(-w / 8, -h / 2 + 3);
-  ctx.quadraticCurveTo(0, -h / 2 - 2, w / 8, -h / 2 + 3);
-  ctx.lineTo(w / 2.4, h / 2 - 6);
-  ctx.closePath();
-  ctx.fill();
   ctx.strokeStyle = OUTLINE_COLOR;
   ctx.lineWidth = OUTLINE_WIDTH;
-  ctx.stroke();
+  ctx.lineJoin = 'round';
 
-  // 깔끔하고 선명한 순백 띠 2개
-  ctx.fillStyle = '#FFFFFF';
+  // 2. 도톰한 아이소메트릭 둥근 사각 주황 밑받침 (Isometric Square Base)
+  const bw = w * 0.92;
+  const bh = 9;
+  const baseY = h / 2 - 5;
 
+  // 받침 두께 옆면
+  ctx.fillStyle = '#E65100';
   ctx.beginPath();
-  ctx.moveTo(-w / 6.5, -h / 6);
-  ctx.lineTo(w / 6.5, -h / 6);
-  ctx.lineTo(w / 4.2, h / 6);
-  ctx.lineTo(-w / 4.2, h / 6);
+  ctx.moveTo(-bw / 2, baseY);
+  ctx.lineTo(0, baseY + bh / 2 + 3);
+  ctx.lineTo(bw / 2, baseY);
+  ctx.lineTo(bw / 2, baseY + 4);
+  ctx.lineTo(0, baseY + bh / 2 + 7);
+  ctx.lineTo(-bw / 2, baseY + 4);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
+
+  // 받침 윗면
+  ctx.fillStyle = '#F57C00';
+  ctx.beginPath();
+  ctx.moveTo(0, baseY - bh / 2);
+  ctx.lineTo(bw / 2, baseY);
+  ctx.lineTo(0, baseY + bh / 2 + 3);
+  ctx.lineTo(-bw / 2, baseY);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // 3. 원뿔 바디 (위가 뚫린 오렌지 Frustum Cone)
+  const topW = w * 0.28;
+  const botW = w * 0.72;
+  const topY = -h / 2 + 4;
+  const botY = baseY - 2;
+
+  // 메인 주황 몸통
+  ctx.fillStyle = '#FF7043';
+  ctx.beginPath();
+  ctx.moveTo(-topW / 2, topY);
+  ctx.lineTo(-botW / 2, botY);
+  ctx.ellipse(0, botY, botW / 2, 3.5, 0, Math.PI, 0, true);
+  ctx.lineTo(topW / 2, topY);
+  ctx.ellipse(0, topY, topW / 2, 2, 0, 0, Math.PI, true);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // 오른쪽 음영 셰이딩 (Cell Shading)
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+  ctx.beginPath();
+  ctx.moveTo(0, topY);
+  ctx.lineTo(0, botY + 3.5);
+  ctx.ellipse(0, botY, botW / 2, 3.5, 0, 0, Math.PI / 2);
+  ctx.lineTo(topW / 2, topY);
+  ctx.ellipse(0, topY, topW / 2, 2, 0, Math.PI / 2, 0, true);
+  ctx.closePath();
+  ctx.fill();
+
+  // 4. 선명한 2개의 곡선 흰색 반사 띠 (Curved White Bands)
+  const drawBand = (y1, y2, tw1, tw2) => {
+    ctx.fillStyle = '#F5F6FA';
+    ctx.beginPath();
+    ctx.moveTo(-tw1 / 2, y1);
+    ctx.lineTo(-tw2 / 2, y2);
+    ctx.ellipse(0, y2, tw2 / 2, 2.5, 0, Math.PI, 0, true);
+    ctx.lineTo(tw1 / 2, y1);
+    ctx.ellipse(0, y1, tw1 / 2, 2, 0, 0, Math.PI, true);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // 띠 오른쪽 음영
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.12)';
+    ctx.beginPath();
+    ctx.moveTo(0, y1);
+    ctx.lineTo(0, y2 + 2.5);
+    ctx.ellipse(0, y2, tw2 / 2, 2.5, 0, 0, Math.PI / 2);
+    ctx.lineTo(tw1 / 2, y1);
+    ctx.ellipse(0, y1, tw1 / 2, 2, 0, Math.PI / 2, 0, true);
+    ctx.closePath();
+    ctx.fill();
+  };
+
+  const hStep = (botY - topY) / 4;
+  drawBand(topY + hStep * 0.6, topY + hStep * 1.6, topW + (botW - topW) * 0.15, topW + (botW - topW) * 0.4);
+  drawBand(topY + hStep * 2.2, topY + hStep * 3.2, topW + (botW - topW) * 0.55, topW + (botW - topW) * 0.8);
+
+  // 5. 상단 뚫린 구멍 (Hollow Top Opening)
+  ctx.fillStyle = '#D84315';
+  ctx.strokeStyle = OUTLINE_COLOR;
+  ctx.lineWidth = OUTLINE_WIDTH;
+  ctx.beginPath();
+  ctx.ellipse(0, topY, topW / 2, 2.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // 구멍 안쪽
+  ctx.fillStyle = '#3E2723';
+  ctx.beginPath();
+  ctx.ellipse(0, topY + 0.5, topW / 3, 1.2, 0, 0, Math.PI * 2);
+  ctx.fill();
 
   ctx.restore();
 }
