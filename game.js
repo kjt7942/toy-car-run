@@ -628,6 +628,13 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
   }
 
+  // 달리는 중 Space는 일시정지. 화면이 멈춰야 그림을 눈으로 뜯어볼 수 있다.
+  // 아래 재시작 분기는 gameState가 PLAYING이 아닐 때만 걸리므로 서로 겹치지 않는다.
+  if (!e.repeat && e.key === ' ' && gameState === 'PLAYING') {
+    togglePause();
+    return;
+  }
+
   // 러너 장르의 생명은 "한 판만 더"의 마찰이 없는 것.
   // 대기/게임오버 상태에서 Space 또는 Enter로 즉시 재시작한다.
   if (!e.repeat && (e.key === ' ' || e.key === 'Enter') && gameState !== 'PLAYING') {
@@ -700,6 +707,22 @@ touchRight.addEventListener('mousedown', (e) => {
 });
 touchRight.addEventListener('mouseup', () => touchRightPressed = false);
 touchRight.addEventListener('mouseleave', () => touchRightPressed = false);
+
+// 3-b. 일시정지
+// 그리기(draw)는 계속 돌고 계산(update)만 멈춘다. 그래서 멈춘 화면에서도 코인 반짝임이나
+// 경광등 점멸 같은 시간 기반 연출은 살아 있어, 스프라이트를 그대로 관찰할 수 있다.
+let paused = false;
+
+function togglePause() {
+  if (gameState !== 'PLAYING') return;
+  paused = !paused;
+
+  // 멈춘 사이 눌려 있던 방향키가 남아 있으면 풀자마자 차가 그쪽으로 쏠린다
+  if (paused) {
+    keys = {};
+    touchLeftPressed = touchRightPressed = false;
+  }
+}
 
 // 4. 조작 안내 가이드
 // 터치 영역은 평소 투명해서 어디를 눌러야 하는지 알 수가 없다.
@@ -1005,6 +1028,7 @@ function startGame(daily = false) {
 
   // 이전 판에서 누르고 있던 상태가 남으면 새 판 시작하자마자 차가 그쪽으로 쏠린다
   touchLeftPressed = touchRightPressed = false;
+  paused = false;
 
   combo = 0;
   comboTimer = 0;
@@ -2393,15 +2417,15 @@ function draw() {
     ctx.lineWidth = 12;
     ctx.strokeRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
-    // DOM HUD(점수/콤보 바)가 차지하는 위쪽을 피해 그 아래에 얹는다
+    // DOM HUD(점수/콤보 바)와 일시정지 배지(y 138~168)를 모두 피해 그 아래에 얹는다
     const label = `${chaser.kind.icon} 탈출까지 ${Math.ceil(chaser.time / 60)}초`;
     ctx.font = '900 21px "Jua", sans-serif';
     ctx.textAlign = 'center';
     ctx.strokeStyle = '#2F3640';
     ctx.lineWidth = 5;
-    ctx.strokeText(label, GAME_WIDTH / 2, 178);
+    ctx.strokeText(label, GAME_WIDTH / 2, 200);
     ctx.fillStyle = '#FFDE59';
-    ctx.fillText(label, GAME_WIDTH / 2, 178);
+    ctx.fillText(label, GAME_WIDTH / 2, 200);
     ctx.restore();
   }
 
@@ -2464,6 +2488,27 @@ function draw() {
   });
 
   ctx.restore();
+
+  // 17. 일시정지 표시. 멈춘 이유가 "그림을 들여다보기 위해서"이므로
+  // 화면을 가리지 않도록 위쪽에 작은 알약 하나만 얹는다.
+  if (paused) {
+    const label = '⏸ 일시정지 · Space';
+    ctx.save();
+    ctx.font = '900 14px "Jua", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const boxW = ctx.measureText(label).width + 28;
+    ctx.fillStyle = 'rgba(47, 54, 64, 0.82)';
+    ctx.beginPath();
+    ctx.roundRect(GAME_WIDTH / 2 - boxW / 2, 138, boxW, 30, 15);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = '#FFDE59';
+    ctx.fillText(label, GAME_WIDTH / 2, 154);
+    ctx.restore();
+  }
 }
 
 // Delta-Time 시간 동기화 기반 루프 (모니터 주사율 60Hz~144Hz에 관계없이 똑같은 속도 보장 및 잔상 차단)
@@ -2481,7 +2526,7 @@ function loop(timestamp) {
   // 60FPS 기준 표준 프레임 델타값
   const dt = elapsed / 16.666;
 
-  update(dt);
+  if (!paused) update(dt);
   draw();
   requestAnimationFrame(loop);
 }
