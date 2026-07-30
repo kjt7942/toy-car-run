@@ -499,17 +499,17 @@ function drawBarrier(ctx, x, y, w, h) {
   ctx.restore();
 }
 
-// 9) 쨍한 핫 레드 오일 드럼통 (둔탁함 해소)
+// 9) 어두운 갈색 클래식 오일 드럼통
 function drawOilDrum(ctx, x, y, w, h) {
   ctx.save();
   ctx.translate(x, y);
 
   // 그림자
-  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';
   ctx.fillRect(-w / 2 - 2, h / 2 - 3, w + 4, 6);
 
-  // 쨍한 레디시 팝 컬러
-  ctx.fillStyle = '#FF3838';
+  // 어두운 갈색 드럼통 바디
+  ctx.fillStyle = '#4E342E';
   ctx.strokeStyle = OUTLINE_COLOR;
   ctx.lineWidth = OUTLINE_WIDTH;
 
@@ -519,6 +519,8 @@ function drawOilDrum(ctx, x, y, w, h) {
   ctx.stroke();
 
   // 중간 띠선
+  ctx.strokeStyle = '#DCDDE1';
+  ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(-w / 2, -h / 6);
   ctx.lineTo(w / 2, -h / 6);
@@ -906,8 +908,8 @@ function drawBoosterItem(ctx, x, y, size) {
   const bounce = Math.sin(Date.now() / 100) * 3;
   ctx.translate(0, bounce);
 
-  // 쨍한 네온 블루
-  ctx.fillStyle = '#17E9E0';
+  // 쨍한 빨간색 로켓 바디
+  ctx.fillStyle = '#FF3838';
   ctx.strokeStyle = OUTLINE_COLOR;
   ctx.lineWidth = 2.5;
   ctx.beginPath();
