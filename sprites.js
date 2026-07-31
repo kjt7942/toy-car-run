@@ -693,98 +693,53 @@ function drawOilDrum(ctx, x, y, w, h) {
 }
 
 // 10) 길바닥에 부드럽고 도톰하게 누워있는 3D 미끄러운 바나나 껍질 (표창 느낌 완전 제거!)
+// 여러 겹 껍질 자락으로 그렸던 이전 버전이 작은 크기에서 뭉개져 알아보기 어렵다는
+// 피드백으로, 누운 초승달 모양 통바나나 한 덩어리로 단순화했다. 실루엣 하나 + 양끝
+// 꼭지 + 광택 줄기만으로 고속 스크롤 중에도 즉시 "바나나"로 읽히는 걸 목표로 했다.
 function drawPuddle(ctx, x, y, w, h) {
   ctx.save();
   ctx.translate(x, y);
 
-  // 도로 위 보기 좋은 적정 미니 스케일
-  ctx.scale(0.82, 0.82);
-
-  // 1. 바닥의 부드럽고 둥근 접지 그림자
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.16)';
+  // 바닥 그림자
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
   ctx.beginPath();
-  ctx.ellipse(0, h * 0.2, w * 0.48, h * 0.22, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, h * 0.36, w * 0.44, h * 0.16, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  const BORDER = '#5E2605'; // 따뜻한 초콜릿 다크 브라운
-  ctx.strokeStyle = BORDER;
-  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = OUTLINE_COLOR;
+  ctx.lineWidth = OUTLINE_WIDTH;
   ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
 
-  // 2. [뒤쪽 좌측 둥근 껍질 날개] - 뾰족함 없는 둥글둥글한 곡면
-  ctx.fillStyle = '#FFAA00';
-  ctx.beginPath();
-  ctx.moveTo(-w * 0.05, -h * 0.08);
-  ctx.bezierCurveTo(-w * 0.25, -h * 0.3, -w * 0.48, -h * 0.15, -w * 0.42, h * 0.08);
-  ctx.bezierCurveTo(-w * 0.35, h * 0.22, -w * 0.12, h * 0.1, 0, 0);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-
-  // 뒤쪽 좌측 껍질 안쪽 부드러운 크림 속살
-  ctx.fillStyle = '#FFF9E6';
-  ctx.beginPath();
-  ctx.moveTo(-w * 0.08, -h * 0.05);
-  ctx.bezierCurveTo(-w * 0.22, -h * 0.2, -w * 0.4, -h * 0.08, -w * 0.35, h * 0.05);
-  ctx.bezierCurveTo(-w * 0.28, h * 0.14, -w * 0.12, h * 0.06, 0, 0);
-  ctx.closePath();
-  ctx.fill();
-
-  // 3. [뒤쪽 우측 둥근 껍질 날개]
-  ctx.fillStyle = '#FF9F00';
-  ctx.beginPath();
-  ctx.moveTo(w * 0.05, -h * 0.08);
-  ctx.bezierCurveTo(w * 0.25, -h * 0.3, w * 0.48, -h * 0.12, w * 0.44, h * 0.1);
-  ctx.bezierCurveTo(w * 0.35, h * 0.24, w * 0.12, h * 0.1, 0, 0);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-
-  // 4. [앞쪽 전면 메인 볼록 둥근 껍질] - 볼륨감이 살아있는 오동통한 껍질
+  // 몸통: 위쪽은 크게 휘고 아래쪽은 완만한 초승달. 두 곡선만으로 깔끔하게.
   ctx.fillStyle = '#FFD000';
   ctx.beginPath();
-  ctx.moveTo(-w * 0.15, -h * 0.15);
-  ctx.bezierCurveTo(-w * 0.35, h * 0.05, -w * 0.4, h * 0.38, -w * 0.2, h * 0.45);
-  ctx.bezierCurveTo(w * 0.05, h * 0.5, w * 0.3, h * 0.35, w * 0.25, h * 0.1);
-  ctx.bezierCurveTo(w * 0.2, -h * 0.05, -w * 0.02, -h * 0.18, -w * 0.15, -h * 0.15);
+  ctx.moveTo(-w * 0.47, h * 0.14);
+  ctx.quadraticCurveTo(0, -h * 0.62, w * 0.47, h * 0.06);
+  ctx.quadraticCurveTo(w * 0.2, h * 0.32, -w * 0.1, h * 0.28);
+  ctx.quadraticCurveTo(-w * 0.32, h * 0.26, -w * 0.47, h * 0.14);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
 
-  // 메인 껍질 안쪽 오목하고 부드러운 크림면 (볼륨감 포인트)
-  ctx.fillStyle = '#FFF59D';
+  // 광택 하이라이트 (윗변을 따라가는 옅은 줄기)
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+  ctx.lineWidth = 2.2;
+  ctx.lineCap = 'round';
   ctx.beginPath();
-  ctx.moveTo(-w * 0.12, -h * 0.08);
-  ctx.bezierCurveTo(-w * 0.28, h * 0.05, -w * 0.32, h * 0.32, -w * 0.15, h * 0.38);
-  ctx.bezierCurveTo(w * 0.05, h * 0.42, w * 0.22, h * 0.28, w * 0.18, h * 0.08);
-  ctx.bezierCurveTo(w * 0.12, -h * 0.05, -w * 0.02, -h * 0.08, -w * 0.12, -h * 0.08);
-  ctx.closePath();
-  ctx.fill();
-
-  // 볼록한 껍질 라인의 부드러운 윤기 하이라이트 (미끄러운 윤기)
-  ctx.fillStyle = '#FFFFFF';
-  ctx.globalAlpha = 0.5;
-  ctx.beginPath();
-  ctx.ellipse(-w * 0.18, h * 0.1, 4, 2.2, -0.5, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.globalAlpha = 1.0;
-
-  // 5. 상단 앙증맞고 통통한 줄기 꼭지 (Stem)
-  ctx.fillStyle = '#2ED573';
-  ctx.beginPath();
-  ctx.moveTo(-w * 0.06, -h * 0.15);
-  ctx.quadraticCurveTo(-w * 0.02, -h * 0.38, w * 0.08, -h * 0.42);
-  ctx.lineTo(w * 0.16, -h * 0.36);
-  ctx.quadraticCurveTo(w * 0.08, -h * 0.28, w * 0.06, -h * 0.12);
-  ctx.closePath();
-  ctx.fill();
+  ctx.moveTo(-w * 0.32, h * 0.04);
+  ctx.quadraticCurveTo(0, -h * 0.4, w * 0.3, -h * 0.02);
   ctx.stroke();
 
-  // 줄기 단면 갈색 원형 컷
-  ctx.fillStyle = '#4A1E04';
+  // 양쪽 꼭지
+  ctx.fillStyle = '#5E2605';
+  ctx.strokeStyle = OUTLINE_COLOR;
+  ctx.lineWidth = OUTLINE_WIDTH;
   ctx.beginPath();
-  ctx.ellipse(w * 0.12, -h * 0.39, 2.8, 1.8, 0.3, 0, Math.PI * 2);
+  ctx.ellipse(-w * 0.46, h * 0.13, 3.6, 2.6, Math.PI / 6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.ellipse(w * 0.46, h * 0.05, 3.6, 2.6, -Math.PI / 8, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
 
