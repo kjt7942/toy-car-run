@@ -692,20 +692,23 @@ function drawOilDrum(ctx, x, y, w, h) {
   ctx.restore();
 }
 
-// 10) 참고 이미지(바나나.png) 기반 3D 카툰 바나나 껍질 (밝고 선명한 바나나)
+// 10) 참고 이미지(바나나.png) 기반 3D 카툰 미니 바나나 껍질 (앙증맞고 귀여운 크기)
 function drawPuddle(ctx, x, y, w, h) {
   ctx.save();
   ctx.translate(x, y);
 
+  // 앙증맞고 귀여운 76% 시각 크기 스케일 조정
+  ctx.scale(0.76, 0.76);
+
   // 1. 바닥 접지 그림자
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.16)';
   ctx.beginPath();
-  ctx.ellipse(0, h / 2 - 2, w * 0.55, 4.5, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, h / 2 - 2, w * 0.5, 4, 0, 0, Math.PI * 2);
   ctx.fill();
 
   const BORDER_COLOR = '#5E2605'; // 짙은 초콜릿 브라운 외곽선
   ctx.strokeStyle = BORDER_COLOR;
-  ctx.lineWidth = 2.5;
+  ctx.lineWidth = 2.4;
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
 
@@ -714,8 +717,8 @@ function drawPuddle(ctx, x, y, w, h) {
   ctx.fillStyle = '#FF9F00';
   ctx.beginPath();
   ctx.moveTo(2, -h * 0.15);
-  ctx.bezierCurveTo(w * 0.3, -h * 0.2, w * 0.5, -h * 0.05, w * 0.48, h * 0.15);
-  ctx.bezierCurveTo(w * 0.35, h * 0.25, w * 0.15, h * 0.08, 0, 0);
+  ctx.bezierCurveTo(w * 0.28, -h * 0.2, w * 0.48, -h * 0.05, w * 0.45, h * 0.15);
+  ctx.bezierCurveTo(w * 0.32, h * 0.25, w * 0.15, h * 0.08, 0, 0);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
@@ -724,8 +727,8 @@ function drawPuddle(ctx, x, y, w, h) {
   ctx.fillStyle = '#FFAA00';
   ctx.beginPath();
   ctx.moveTo(-2, -h * 0.1);
-  ctx.bezierCurveTo(-w * 0.25, -h * 0.25, -w * 0.48, -h * 0.1, -w * 0.45, h * 0.08);
-  ctx.bezierCurveTo(-w * 0.3, h * 0.18, -w * 0.1, h * 0.02, 0, 0);
+  ctx.bezierCurveTo(-w * 0.23, -h * 0.25, -w * 0.45, -h * 0.1, -w * 0.42, h * 0.08);
+  ctx.bezierCurveTo(-w * 0.28, h * 0.18, -w * 0.1, h * 0.02, 0, 0);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
@@ -734,8 +737,8 @@ function drawPuddle(ctx, x, y, w, h) {
   ctx.fillStyle = '#FFB300';
   ctx.beginPath();
   ctx.moveTo(3, -h * 0.2);
-  ctx.bezierCurveTo(w * 0.25, -h * 0.05, w * 0.52, h * 0.22, w * 0.45, h * 0.35);
-  ctx.bezierCurveTo(w * 0.25, h * 0.42, w * 0.1, h * 0.15, 0, 0);
+  ctx.bezierCurveTo(w * 0.23, -h * 0.05, w * 0.48, h * 0.22, w * 0.42, h * 0.35);
+  ctx.bezierCurveTo(w * 0.23, h * 0.42, w * 0.1, h * 0.15, 0, 0);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
@@ -744,8 +747,8 @@ function drawPuddle(ctx, x, y, w, h) {
   ctx.fillStyle = '#FFD000';
   ctx.beginPath();
   ctx.moveTo(0, -h * 0.25);
-  ctx.bezierCurveTo(-w * 0.18, -h * 0.05, -w * 0.52, h * 0.25, -w * 0.48, h * 0.42);
-  ctx.bezierCurveTo(-w * 0.28, h * 0.48, -w * 0.08, h * 0.2, 0, 0);
+  ctx.bezierCurveTo(-w * 0.16, -h * 0.05, -w * 0.48, h * 0.25, -w * 0.44, h * 0.42);
+  ctx.bezierCurveTo(-w * 0.25, h * 0.48, -w * 0.08, h * 0.2, 0, 0);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
@@ -753,16 +756,16 @@ function drawPuddle(ctx, x, y, w, h) {
   // 메인 껍질 퐁퐁 하이라이트 Spot
   ctx.fillStyle = '#FFF375';
   ctx.beginPath();
-  ctx.ellipse(-w * 0.12, -h * 0.15, 3.5, 2.2, -0.4, 0, Math.PI * 2);
+  ctx.ellipse(-w * 0.11, -h * 0.15, 3.2, 2.0, -0.4, 0, Math.PI * 2);
   ctx.fill();
 
   // 4. 위로 길게 솟아 꺾인 바나나 줄기 꼭지 (Stem)
   ctx.fillStyle = '#FFC000';
   ctx.beginPath();
-  ctx.moveTo(-4, -h * 0.2);
-  ctx.quadraticCurveTo(-1, -h * 0.42, 3, -h * 0.48);
-  ctx.lineTo(8, -h * 0.42);
-  ctx.quadraticCurveTo(3, -h * 0.35, 3, -h * 0.18);
+  ctx.moveTo(-3.5, -h * 0.2);
+  ctx.quadraticCurveTo(-1, -h * 0.4, 3, -h * 0.46);
+  ctx.lineTo(7.5, -h * 0.4);
+  ctx.quadraticCurveTo(3, -h * 0.33, 3, -h * 0.18);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
@@ -770,7 +773,7 @@ function drawPuddle(ctx, x, y, w, h) {
   // 줄기 단면 갈색 원형 컷 (Stem Top Cut)
   ctx.fillStyle = '#4A1E04';
   ctx.beginPath();
-  ctx.ellipse(5.5, -h * 0.45, 3.2, 2, 0.4, 0, Math.PI * 2);
+  ctx.ellipse(5.2, -h * 0.43, 3.0, 1.8, 0.4, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
 
