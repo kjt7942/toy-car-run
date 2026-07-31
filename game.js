@@ -304,7 +304,6 @@ const SLIPPERY_DURATION = 150;  // 2.5초
 const SLIPPERY_FRICTION = 0.93; // 1에 가까울수록 잘 안 멈춘다 = 미끄러짐
 const SLIPPERY_ACC = 0.26;      // 접지력을 잃어 가속이 붙지 않는다
 const SPIN_MAX_SPEED = 0.22;    // 미끄러지는 동안 최고 회전 속도 (라디안/프레임)
-const SPIN_DECAY = 0.85;        // 미끄럼이 끝난 뒤 회전이 잦아드는 비율
 
 // 코인 2배 보너스 게이트를 통과했을 때의 잔여 시간
 let bonusTime = 0;
@@ -1065,6 +1064,7 @@ function startGame(daily = false) {
   car.vx = 0;
   car.angle = 0;
   car.spin = 0;
+  car.spinTarget = 0;
   car.wheelRotation = 0;
   
   obstacles = [];
@@ -1976,12 +1976,27 @@ function update(dt = 1.0) {
   car.vx *= Math.pow(frictionNow, moveSpeedModifier);
 
   // 바나나를 밟으면 조작과 별개로 빙글빙글 돈다. 회전 속도는 남은 미끄럼 시간에 비례해
-  // 처음엔 빠르게 돌다가 그립을 되찾을수록 잦아들고, 다 돌고 나면 원래 각도로 감쇠한다.
+  // 처음엔 빠르게 돌다가 그립을 되찾을수록 잦아든다.
+  // 미끄럼이 끝나는 시점의 각도는 2π의 배수(=정면)라는 보장이 없어서, 예전엔 남은 각도를
+  // 거꾸로 되감아 정면으로 되돌렸다. 그런데 그 각도가 마침 반바퀴 근처(뒤를 보는 자세)면
+  // 회복 구간에서 차가 홱 뒤로 꺾였다가 급하게 정면으로 돌아오는 것처럼 보였다.
+  // 그래서 되감지 않고, 계속 같은 방향으로 마저 돌아 "다음" 2π의 배수에서 멈추도록 고친다.
+  // 항상 정면에서 끝나고, 방향 전환이 없어 부드럽다. 평균적으로 반 바퀴 정도 더 돈다.
   if (isSlippery) {
     car.spin += SPIN_MAX_SPEED * (slipperyTime / SLIPPERY_DURATION) * moveSpeedModifier;
-    car.spin %= Math.PI * 2;
-  } else if (Math.abs(car.spin) > 0.001) {
-    car.spin *= Math.pow(SPIN_DECAY, moveSpeedModifier);
+    car.spinTarget = 0; // 다음에 슬립이 끝나는 순간 새로 계산한다
+  } else if (car.spin > 0.001 || car.spinTarget > 0) {
+    if (car.spinTarget === 0) {
+      car.spinTarget = Math.ceil((car.spin + 0.001) / (Math.PI * 2)) * (Math.PI * 2);
+    }
+    const remaining = car.spinTarget - car.spin;
+    if (remaining <= 0.01) {
+      car.spin = 0;
+      car.spinTarget = 0;
+    } else {
+      // 남은 거리가 줄수록 천천히 도는 ease-out. 최소 속도를 둬 무한히 다가가기만 하지 않게 한다.
+      car.spin += Math.max(remaining * 0.1, 0.03) * moveSpeedModifier;
+    }
   } else {
     car.spin = 0;
   }
