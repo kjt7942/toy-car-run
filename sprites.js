@@ -1129,7 +1129,7 @@ function drawCoinItem(ctx, x, y, size, risky) {
   ctx.restore();
 }
 
-// 2) 부스터 ⚡
+// 2) 번개 아우라 효과가 가미된 쨍한 빨간색 캔 부스터 ⚡
 function drawBoosterItem(ctx, x, y, size) {
   ctx.save();
   ctx.translate(x, y);
@@ -1137,26 +1137,73 @@ function drawBoosterItem(ctx, x, y, size) {
   const bounce = Math.sin(Date.now() / 100) * 3;
   ctx.translate(0, bounce);
 
-  // 쨍한 빨간색 로켓 바디
+  // 1. 번개 모양 네온 아우라 광채 & 스파크 (Lightning Energy Aura)
+  const auraPulse = 0.85 + Math.sin(Date.now() / 90) * 0.25;
+  ctx.shadowColor = '#FFD32A';
+  ctx.shadowBlur = 15 * auraPulse;
+
+  // 아우라 배경 펄스 링
+  ctx.fillStyle = 'rgba(255, 211, 42, 0.22)';
+  ctx.beginPath();
+  ctx.arc(0, 0, size * 0.75 * auraPulse, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 사방으로 튀는 앙증맞은 미니 번개 스파크 4개 (Aura Lightning Rays)
+  ctx.strokeStyle = '#FFD32A';
+  ctx.lineWidth = 1.8;
+  const sparkRot = (Date.now() / 180) % (Math.PI * 2);
+  for (let i = 0; i < 4; i++) {
+    const angle = sparkRot + (i * Math.PI / 2);
+    const r1 = size * 0.52;
+    const r2 = size * 0.78;
+    const sx = Math.cos(angle) * r1;
+    const sy = Math.sin(angle) * r1;
+    const ex = Math.cos(angle + 0.2) * r2;
+    const ey = Math.sin(angle + 0.2) * r2;
+
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo((sx + ex) / 2 + (i % 2 === 0 ? 3 : -3), (sy + ey) / 2);
+    ctx.lineTo(ex, ey);
+    ctx.stroke();
+  }
+
+  // 2. 쨍한 붉은색 에너지 캔 바디 (Can Body)
   ctx.fillStyle = '#FF3838';
   ctx.strokeStyle = OUTLINE_COLOR;
   ctx.lineWidth = 2.5;
   ctx.beginPath();
-  ctx.roundRect(-size / 2.5, -size / 1.8, size * 0.8, size * 1.1, 8);
+  ctx.roundRect(-size / 2.4, -size / 1.8, size * 0.83, size * 1.1, 7);
   ctx.fill();
   ctx.stroke();
 
-  // 황금 번개 ⚡
-  ctx.fillStyle = '#FFD32A';
+  // 캔 상단 실버 림 (Can Lid Rim)
+  ctx.fillStyle = '#F5F6FA';
   ctx.beginPath();
-  ctx.moveTo(-2, -8);
-  ctx.lineTo(6, -2);
+  ctx.roundRect(-size / 2.4 + 1.5, -size / 1.8 - 2, size * 0.83 - 3, 4, 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // 캔 좌측 광택 하이라이트
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+  ctx.beginPath();
+  ctx.roundRect(-size / 2.4 + 3, -size / 1.8 + 3, 3.5, size * 1.1 - 6, 2);
+  ctx.fill();
+
+  // 3. 선명한 황금 ⚡ 번개 마크 (Golden Lightning Icon)
+  ctx.fillStyle = '#FFD32A';
+  ctx.strokeStyle = OUTLINE_COLOR;
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(-2, -9);
+  ctx.lineTo(7, -2);
   ctx.lineTo(1, 0);
-  ctx.lineTo(5, 7);
-  ctx.lineTo(-4, 0);
+  ctx.lineTo(6, 8);
+  ctx.lineTo(-5, 1);
   ctx.lineTo(1, -2);
   ctx.closePath();
   ctx.fill();
+  ctx.stroke();
 
   ctx.restore();
 }
