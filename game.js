@@ -1557,11 +1557,12 @@ function spawnDust() {
 }
 
 // 오일 충돌 시 시각방해 효과 설정
+// 드럼통 위치는 안 쓴다 — 화면(도로) 가운데를 넓게 가리는 게 목적이라 어디서 부딪히든
+// 항상 가운데에 크게 뜨는 편이 낫다. radius는 스프라이트 쪽에서 2.8배로 키워 그리므로
+// 15~40이던 예전 값은 도로 폭(240)의 극히 일부만 가려 "효과가 좁다"는 피드백을 받았다.
 function triggerScreenOil() {
   screenOils.push({
-    x: Math.random() * (GAME_WIDTH - 60) + 30,
-    y: Math.random() * (GAME_HEIGHT / 2) + 80,
-    radius: Math.random() * 25 + 15,
+    radius: Math.random() * 15 + 50,
     alpha: 0.9,
     life: 180 // 약 3초 유지
   });
@@ -2549,15 +2550,21 @@ function draw() {
   }
 
   // 16. 오일 스크린 번짐 연출 그리기 (가장 위에 덧칠)
+  // 그래픽 쪽(sprites.js)에 도로 전체를 가리는 큰 스플래터 함수가 있으면 그걸 쓰고,
+  // 없으면(예: main 브랜치) 같은 자리에 뜨는 기본형으로 대체한다.
   screenOils.forEach(oil => {
+    if (typeof drawScreenOilSplatter === 'function') {
+      drawScreenOilSplatter(ctx, oil);
+      return;
+    }
     ctx.save();
     ctx.globalAlpha = oil.alpha;
     ctx.fillStyle = 'rgba(47, 54, 64, 0.95)'; // 새까만 장난감 오일 색
+    const cx = GAME_WIDTH / 2, cy = GAME_HEIGHT * 0.42;
     ctx.beginPath();
-    // 둥글고 귀여운 덩어리형 액체 튐 표현
-    ctx.arc(oil.x, oil.y, oil.radius, 0, Math.PI * 2);
-    ctx.arc(oil.x - oil.radius * 0.4, oil.y + oil.radius * 0.3, oil.radius * 0.6, 0, Math.PI * 2);
-    ctx.arc(oil.x + oil.radius * 0.5, oil.y - oil.radius * 0.2, oil.radius * 0.5, 0, Math.PI * 2);
+    ctx.arc(cx, cy, oil.radius, 0, Math.PI * 2);
+    ctx.arc(cx - oil.radius * 0.4, cy + oil.radius * 0.3, oil.radius * 0.6, 0, Math.PI * 2);
+    ctx.arc(cx + oil.radius * 0.5, cy - oil.radius * 0.2, oil.radius * 0.5, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   });
