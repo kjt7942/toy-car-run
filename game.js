@@ -136,12 +136,13 @@ let keys = {};
 let touchLeftPressed = false;
 let touchRightPressed = false;
 
-// 게임 밸런스 및 물리 상수 (초반 난이도를 쫄깃하게 4.8로 상향, 가속 및 최고속도 버프)
-let gameSpeed = 4.8;
-const BASE_SPEED = 4.8;
-const MAX_SPEED = 12.0;
-// 최고 속도까지 3분 30초가 걸려 초반이 늘어지던 문제를 해결. 약 80초면 최고 속도에 도달한다.
-const SPEED_INC = 0.0015;
+// 게임 밸런스 및 물리 상수
+// 화면이 너무 빨리 흘러서 눈이 아프다는 피드백으로 기존 값(4.8~12.0)에서 전체를 25% 낮췄다.
+// 최고 속도까지 걸리는 시간(약 80초)은 그대로 유지되도록 SPEED_INC도 같은 비율로 낮춘다.
+let gameSpeed = 3.6;
+const BASE_SPEED = 3.6;
+const MAX_SPEED = 9.0;
+const SPEED_INC = 0.00113;
 
 // --- [점수 및 콤보 밸런스] ---
 // 기존에는 이미 60fps로 정규화된 dt를 16.6으로 한 번 더 나눠 주행 점수가 초당 3.6점에 그쳤다.
@@ -189,7 +190,7 @@ let carPerk = CARS[0];
 // 규칙이 강제되니 늘 쓰던 안전한 플레이가 통하지 않는다.
 const DAILY_MODS = [
   { id: 'oneLife',  name: '한 번의 기회', desc: '하트 1개로 시작 · 점수 2배',    lives: 1, scoreMul: 2 },
-  { id: 'sprint',   name: '전력 질주',   desc: '처음부터 고속 주행 · 점수 1.5배', speed: 8.6, scoreMul: 1.5 },
+  { id: 'sprint',   name: '전력 질주',   desc: '처음부터 고속 주행 · 점수 1.5배', speed: 6.45, scoreMul: 1.5 },
   { id: 'coinRush', name: '코인 러시',   desc: '코인 점수 2배 · 하트 미등장',    coinMul: 2, noHeart: true, scoreMul: 1 },
   { id: 'bare',     name: '맨몸 주행',   desc: '파워업 미등장 · 점수 1.8배',     noPowerup: true, scoreMul: 1.8 }
 ];
@@ -368,6 +369,13 @@ let gameItems = [];
 
 let spawnTimer = 0;
 let spawnInterval = 70; // 프레임당 스폰 주기 (더 촘촘하게 압박!)
+
+// [센터 방치 견제] 방해차량이 중앙으로 쏠려오는 견제는 확률적이라 운이 나쁘면 한참 안 나올 수
+// 있었다. 중앙을 위협하는 장애물(가운데 근처를 지나는 장애물, 또는 반드시 중앙을 가로지르는
+// 횡단보행자/동물)이 이 시간 이상 안 나오면 콘 하나를 강제로 중앙에 떨어뜨려 상한을 못 박는다.
+// 정적 장애물 배치 자체는 그대로 두고 위협이 끊기지 않게만 보정한다.
+const CENTER_IDLE_LIMIT = 240; // 4초
+let centerIdleTimer = 0;
 
 // --- [Web Audio API 효과음 & 레트로 BGM 시스템] ---
 let audioCtx = null;
@@ -1055,6 +1063,7 @@ function startGame(daily = false) {
   nextLevelDistance = LEVEL_DISTANCE;
   spawnTimer = 0;
   spawnInterval = 70;
+  centerIdleTimer = 0;
   chaser = null;
 
   runStats = { coins: 0, destroyed: 0, damage: 0, maxMult: 1, nearMisses: 0 };
@@ -1594,8 +1603,10 @@ const CRITTER_TONES = ['#FDCB6E', '#E17055', '#DFE6E9', '#B2BEC3'];
 // 걷는 속도. 옆으로 움직이는 장애물은 "지금 위치"가 아니라 "부딪힐 때 위치"를 예측해야 해서,
 // 빠르면 빈 곳을 보고 꺾은 순간 그리로 걸어와 버린다. 화면 위에서 플레이어 앞까지 내려오는
 // 동안의 가로 이동이 한 차선(약 60px)을 넘지 않도록 잡은 값이다. 난이도 조절 지점.
-const CROSSER_SPEED_MIN = 0.4;
-const CROSSER_SPEED_MAX = 0.75;
+// 게임 전체 속도를 25% 낮추면서 화면을 가로지르는 데 걸리는 시간이 그만큼 늘어 드리프트가
+// 88px -> 118px로 커졌다. 같은 비율(0.75)로 낮춰서 원래의 예측 가능한 범위를 되찾는다.
+const CROSSER_SPEED_MIN = 0.3;
+const CROSSER_SPEED_MAX = 0.5625;
 
 // 건너는 대상은 도로 가장자리에서 출발해 반대편으로 걸어간다.
 // 다른 장애물과 달리 도로 벽에 튕기지 않고 화면 밖으로 걸어 나가야 하므로 crossing 표식을 단다.
@@ -1617,6 +1628,8 @@ function pushCrosser(type, fromLeft, dy = 0) {
     tone: tones[Math.floor(Math.random() * tones.length)]
   });
   if (dy > patternDepth) patternDepth = dy;
+  // 횡단은 도로 끝에서 반대쪽 끝까지 걸어가므로 도중에 반드시 중앙을 지난다
+  centerIdleTimer = 0;
 }
 
 const SPAWN_TOP = -46;
@@ -1629,8 +1642,9 @@ function roadPos(t, w) {
 
 function pushObs(type, t, dy = 0, opts = {}) {
   const spec = OBSTACLE_SPECS[type];
+  const x = roadPos(t, spec.w);
   obstacles.push({
-    x: roadPos(t, spec.w),
+    x: x,
     y: SPAWN_TOP - dy,
     width: spec.w,
     height: spec.h,
@@ -1640,6 +1654,8 @@ function pushObs(type, t, dy = 0, opts = {}) {
     vx: opts.vx || 0
   });
   if (dy > patternDepth) patternDepth = dy;
+  // 가운데에 딱 붙어 있는 차와 실제로 부딪힐 만큼 중앙에 가까운 장애물만 견제로 친다
+  if (Math.abs(x - (roadX + roadWidth / 2)) < 24) centerIdleTimer = 0;
 }
 
 // 게이트는 도로 절반을 가로막는 넓적한 문이라 다른 아이템과 크기가 다르다
@@ -1745,14 +1761,16 @@ const PATTERNS = [
   },
   {
     // 깔때기: 양쪽에서 조여들어 중앙으로 몰아넣는다
+    // 마지막 관문(돌멩이 2개 사이)이 39px 틈이라 너무 빡빡하다는 피드백으로 91px로 넓혔다.
+    // 중간 콘 관문도 같이 넓혀서(0.18/0.82 -> 0.10/0.90) 앞 단계부터 여유가 생기게 했다.
     name: 'funnel', minLevel: 3, weight: 12, growth: 0.07,
     build() {
       pushObs('cone', 0.0, 0);
       pushObs('cone', 1.0, 0);
-      pushObs('cone', 0.18, 88);
-      pushObs('cone', 0.82, 88);
-      pushObs('rock', 0.34, 176);
-      pushObs('rock', 0.66, 176);
+      pushObs('cone', 0.10, 88);
+      pushObs('cone', 0.90, 88);
+      pushObs('rock', 0.22, 176);
+      pushObs('rock', 0.78, 176);
       pushItem('coin', 0.5, 176, true);
       pushItem('coin', 0.5, 226);
     }
@@ -1813,9 +1831,9 @@ const PATTERNS = [
   {
     // 횡단: 사람이나 동물이 길을 건넌다. 치면 경찰 추격이 시작되므로 반드시 비켜줘야 한다.
     // 부수는 대상이 아니라 "지나갈 때까지 기다리는" 대상이라 다른 패턴과 결이 다르다.
-    // 가중치가 낮아 실제로는 거의 안 나온다는 피드백을 반영해 상향 (10 -> 20, 다른 패턴들과
-    // 비슷한 빈도가 되도록. growth도 같이 올려 레벨이 올라도 계속 자주 나오게 한다.
-    name: 'crossing', minLevel: 3, weight: 20, growth: 0.05,
+    // 가중치가 낮아 실제로는 거의 안 나온다는 피드백을 반영해 상향 (10 -> 20 -> 26).
+    // 장애물로서 제 역할을 하려면 single(26)만큼은 자주 나와야 한다는 후속 피드백으로 추가 상향.
+    name: 'crossing', minLevel: 3, weight: 26, growth: 0.06,
     build() {
       const fromLeft = Math.random() < 0.5;
       pushCrosser(Math.random() < 0.5 ? 'walker' : 'critter', fromLeft);
@@ -2076,6 +2094,14 @@ function update(dt = 1.0) {
     // 패턴과 패턴 사이의 숨 돌릴 틈. 속도와 레벨이 오를수록 짧아진다.
     spawnInterval = Math.max(22, 52 - (targetSpeed * 2.2) - (level - 1) * 1.5);
     spawnPattern(targetSpeed);
+  }
+
+  // 7-1. 중앙 방치 견제: 추격 중엔 어차피 계속 움직여야 하니 재지 않는다.
+  if (!chaser) {
+    centerIdleTimer += dt;
+    if (centerIdleTimer >= CENTER_IDLE_LIMIT) {
+      pushObs('cone', 0.5, 0); // pushObs 내부에서 centerIdleTimer를 0으로 되돌린다
+    }
   }
 
   // 8. 아이템 루프 처리 (자석 연출 포함)
