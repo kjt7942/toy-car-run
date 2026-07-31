@@ -695,74 +695,87 @@ function drawOilDrum(ctx, x, y, w, h) {
   ctx.restore();
 }
 
-// 10) 쨍하고 귀여운 3D 아케이드 바나나 껍질 (밟으면 미끄러져 빙글빙글 스핀!)
+// 10) 참고 이미지(바나나.png) 기반 3D 카툰 바나나 껍질 (밝고 선명한 바나나)
 function drawPuddle(ctx, x, y, w, h) {
   ctx.save();
   ctx.translate(x, y);
 
-  // 바닥 접지 그림자
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.16)';
+  // 1. 바닥 접지 그림자
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
   ctx.beginPath();
-  ctx.ellipse(0, h * 0.18, w * 0.52, h * 0.26, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, h / 2 - 2, w * 0.55, 4.5, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.strokeStyle = OUTLINE_COLOR;
-  ctx.lineWidth = OUTLINE_WIDTH;
+  const BORDER_COLOR = '#5E2605'; // 짙은 초콜릿 브라운 외곽선
+  ctx.strokeStyle = BORDER_COLOR;
+  ctx.lineWidth = 2.5;
   ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
 
-  // 1. 사방으로 앙증맞게 펼쳐진 바나나 껍질 4자락
-  const peels = [
-    { angle: -0.35, len: w * 0.46, cur: -0.4 },
-    { angle: 1.25,  len: w * 0.44, cur: 0.45 },
-    { angle: 2.75,  len: w * 0.48, cur: -0.35 },
-    { angle: 4.25,  len: w * 0.42, cur: 0.4 }
-  ];
-
-  peels.forEach(p => {
-    ctx.save();
-    ctx.rotate(p.angle);
-
-    // 노란 바나나 겉면
-    ctx.fillStyle = '#FFC048';
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.quadraticCurveTo(p.len * 0.5, p.cur * 14, p.len, 0);
-    ctx.quadraticCurveTo(p.len * 0.5, p.cur * -10, 0, 0);
-    ctx.fill();
-    ctx.stroke();
-
-    // 껍질 안쪽 부드러운 유백색 속면
-    ctx.fillStyle = '#FFF9E6';
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.quadraticCurveTo(p.len * 0.4, p.cur * 8, p.len * 0.8, 0);
-    ctx.quadraticCurveTo(p.len * 0.4, p.cur * -5, 0, 0);
-    ctx.fill();
-
-    ctx.restore();
-  });
-
-  // 2. 중앙 바나나 속살 뭉치 & 초록 줄기 꼭지
-  ctx.fillStyle = '#FFEAA7';
+  // 2. 뒤쪽/오른쪽 껍질 자락들 (어두운 주황 오렌지 셰이딩)
+  // 뒤쪽 오른쪽 껍질
+  ctx.fillStyle = '#FF9F00';
   ctx.beginPath();
-  ctx.arc(0, 0, 4.5, 0, Math.PI * 2);
+  ctx.moveTo(2, -h * 0.15);
+  ctx.bezierCurveTo(w * 0.3, -h * 0.2, w * 0.5, -h * 0.05, w * 0.48, h * 0.15);
+  ctx.bezierCurveTo(w * 0.35, h * 0.25, w * 0.15, h * 0.08, 0, 0);
+  ctx.closePath();
   ctx.fill();
   ctx.stroke();
 
-  // 상단 바나나 초록 줄기 꼭지
-  ctx.fillStyle = '#2ED573';
+  // 뒤쪽 왼쪽 껍질
+  ctx.fillStyle = '#FFAA00';
   ctx.beginPath();
-  ctx.roundRect(-2.5, -h * 0.44, 5, 7, 2);
+  ctx.moveTo(-2, -h * 0.1);
+  ctx.bezierCurveTo(-w * 0.25, -h * 0.25, -w * 0.48, -h * 0.1, -w * 0.45, h * 0.08);
+  ctx.bezierCurveTo(-w * 0.3, h * 0.18, -w * 0.1, h * 0.02, 0, 0);
+  ctx.closePath();
   ctx.fill();
   ctx.stroke();
 
-  // 3. 미끄럼 깜빡이 경고 반짝이 (펄스 스타)
-  const pulse = Math.sin(Date.now() / 140) * 1.5;
-  ctx.fillStyle = '#FFD32A';
+  // 오른쪽 앞쪽 껍질
+  ctx.fillStyle = '#FFB300';
   ctx.beginPath();
-  ctx.arc(-w * 0.32, -h * 0.22, 2.2 + pulse, 0, Math.PI * 2);
-  ctx.arc(w * 0.35, h * 0.18, 1.8 + pulse, 0, Math.PI * 2);
+  ctx.moveTo(3, -h * 0.2);
+  ctx.bezierCurveTo(w * 0.25, -h * 0.05, w * 0.52, h * 0.22, w * 0.45, h * 0.35);
+  ctx.bezierCurveTo(w * 0.25, h * 0.42, w * 0.1, h * 0.15, 0, 0);
+  ctx.closePath();
   ctx.fill();
+  ctx.stroke();
+
+  // 3. 전면 메인 왼쪽 껍질 (쨍한 옐로우 + 원형 하이라이트)
+  ctx.fillStyle = '#FFD000';
+  ctx.beginPath();
+  ctx.moveTo(0, -h * 0.25);
+  ctx.bezierCurveTo(-w * 0.18, -h * 0.05, -w * 0.52, h * 0.25, -w * 0.48, h * 0.42);
+  ctx.bezierCurveTo(-w * 0.28, h * 0.48, -w * 0.08, h * 0.2, 0, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // 메인 껍질 퐁퐁 하이라이트 Spot
+  ctx.fillStyle = '#FFF375';
+  ctx.beginPath();
+  ctx.ellipse(-w * 0.12, -h * 0.15, 3.5, 2.2, -0.4, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 4. 위로 길게 솟아 꺾인 바나나 줄기 꼭지 (Stem)
+  ctx.fillStyle = '#FFC000';
+  ctx.beginPath();
+  ctx.moveTo(-4, -h * 0.2);
+  ctx.quadraticCurveTo(-1, -h * 0.42, 3, -h * 0.48);
+  ctx.lineTo(8, -h * 0.42);
+  ctx.quadraticCurveTo(3, -h * 0.35, 3, -h * 0.18);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // 줄기 단면 갈색 원형 컷 (Stem Top Cut)
+  ctx.fillStyle = '#4A1E04';
+  ctx.beginPath();
+  ctx.ellipse(5.5, -h * 0.45, 3.2, 2, 0.4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
 
   ctx.restore();
 }
