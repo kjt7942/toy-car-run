@@ -1810,7 +1810,9 @@ const PATTERNS = [
   {
     // 횡단: 사람이나 동물이 길을 건넌다. 치면 경찰 추격이 시작되므로 반드시 비켜줘야 한다.
     // 부수는 대상이 아니라 "지나갈 때까지 기다리는" 대상이라 다른 패턴과 결이 다르다.
-    name: 'crossing', minLevel: 3, weight: 10, growth: 0.03,
+    // 가중치가 낮아 실제로는 거의 안 나온다는 피드백을 반영해 상향 (10 -> 20, 다른 패턴들과
+    // 비슷한 빈도가 되도록. growth도 같이 올려 레벨이 올라도 계속 자주 나오게 한다.
+    name: 'crossing', minLevel: 3, weight: 20, growth: 0.05,
     build() {
       const fromLeft = Math.random() < 0.5;
       pushCrosser(Math.random() < 0.5 ? 'walker' : 'critter', fromLeft);
