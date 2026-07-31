@@ -145,7 +145,7 @@ function drawPlayer() {
 
   ctx.save();
   ctx.translate(car.x, car.y);
-  ctx.rotate(car.angle);
+  ctx.rotate(car.angle + (car.spin || 0));
 
   // 1. 그림자 효과 (부스터 상태일 때 파랗게 빛남)
   if (boosterTime > 0) {
@@ -455,27 +455,47 @@ function drawOilDrum(ctx, x, y, w, h) {
 }
 
 // 9) 물웅덩이 그리기 (밟으면 미끄러지는 조작 방해형 함정)
+// 이름은 puddle이지만 실제로는 바나나 껍질을 그린다. 밟으면 미끄러진다는 규칙(game.js)은
+// 그대로고 그림만 바나나로 바꿨다 — 물웅덩이가 함정처럼 안 느껴진다는 피드백 때문.
 function drawPuddle(ctx, x, y, w, h) {
   ctx.save();
   ctx.translate(x, y);
 
-  ctx.fillStyle = 'rgba(52, 73, 94, 0.55)';
+  // 바닥 그림자
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
   ctx.beginPath();
-  ctx.ellipse(0, 0, w / 2, h / 2, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, h * 0.32, w * 0.42, h * 0.22, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.strokeStyle = '#74B9FF';
-  ctx.lineWidth = 3;
+  // 초승달 모양 바나나 몸통
+  ctx.fillStyle = '#FFD32A';
+  ctx.strokeStyle = '#2F3640';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(-w * 0.46, h * 0.1);
+  ctx.quadraticCurveTo(0, -h * 0.62, w * 0.46, h * 0.05);
+  ctx.quadraticCurveTo(0, -h * 0.1, -w * 0.46, h * 0.1);
+  ctx.closePath();
+  ctx.fill();
   ctx.stroke();
 
-  // 찰랑이는 물결 하이라이트
-  ctx.strokeStyle = 'rgba(223, 249, 251, 0.85)';
-  ctx.lineWidth = 2;
+  // 양쪽 꼭지 (갈색)
+  ctx.fillStyle = '#7C5A3A';
   ctx.beginPath();
-  ctx.ellipse(-w * 0.12, -h * 0.12, w * 0.22, h * 0.18, 0, Math.PI * 0.9, Math.PI * 1.95);
+  ctx.ellipse(-w * 0.46, h * 0.08, 3.5, 3, Math.PI / 4, 0, Math.PI * 2);
+  ctx.fill();
   ctx.stroke();
   ctx.beginPath();
-  ctx.ellipse(w * 0.18, h * 0.1, w * 0.14, h * 0.12, 0, Math.PI * 0.9, Math.PI * 1.95);
+  ctx.ellipse(w * 0.46, h * 0.06, 3.5, 3, -Math.PI / 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // 껍질 능선 하이라이트
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(-w * 0.34, h * 0.02);
+  ctx.quadraticCurveTo(0, -h * 0.38, w * 0.32, -h * 0.02);
   ctx.stroke();
 
   ctx.restore();
