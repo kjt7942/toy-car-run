@@ -1088,7 +1088,7 @@ function startGame(daily = false) {
   // 넉넉하게 배경 데코 스폰
   for (let i = 0; i < 8; i++) {
     sceneryObjects.push({
-      x: Math.random() < 0.5 ? Math.random() * (roadX - 35) + 15 : Math.random() * (GAME_WIDTH - roadX - 35) + roadX + roadWidth + 20,
+      x: Math.random() < 0.5 ? Math.random() * (roadX - 35) + 15 : Math.random() * (GAME_WIDTH - roadX - roadWidth - 35) + roadX + roadWidth + 20,
       y: Math.random() * GAME_HEIGHT,
       type: Math.random() < 0.4 ? 'tree' : (Math.random() < 0.75 ? 'flower' : 'windmill'),
       rot: Math.random() * Math.PI
@@ -2082,9 +2082,9 @@ function update(dt = 1.0) {
   sceneryObjects.forEach(obj => {
     if (obj.y > GAME_HEIGHT + 40) {
       obj.y = -40;
-      obj.x = Math.random() < 0.5 
-        ? Math.random() * (roadX - 35) + 15 
-        : Math.random() * (GAME_WIDTH - roadX - 35) + roadX + roadWidth + 20;
+      obj.x = Math.random() < 0.5
+        ? Math.random() * (roadX - 35) + 15
+        : Math.random() * (GAME_WIDTH - roadX - roadWidth - 35) + roadX + roadWidth + 20;
       obj.type = Math.random() < 0.4 ? 'tree' : (Math.random() < 0.75 ? 'flower' : 'windmill');
     }
   });
