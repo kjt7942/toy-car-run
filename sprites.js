@@ -210,12 +210,9 @@ function drawPlayer() {
   ctx.save();
   ctx.translate(car.x, car.y);
 
-  // 바나나/오일 밟았을 때 빙글빙글 360도 스핀 회전 연출
-  let spinAngle = car.angle;
-  if (typeof car !== 'undefined' && car.slipTime > 0) {
-    spinAngle += (car.slipTime * 0.38);
-  }
-  ctx.rotate(spinAngle);
+  // 바나나를 밟았을 때 빙글빙글 도는 회전은 game.js의 update()가 car.spin에
+  // 누적/감쇠시켜 준다 (car.slipTime은 존재한 적 없는 필드라 항상 false였다).
+  ctx.rotate(car.angle + (car.spin || 0));
 
   // 1. 그림자 효과 (부스터 시 쨍한 미니멀 글로우)
   if (boosterTime > 0) {
