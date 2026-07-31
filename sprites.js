@@ -692,79 +692,101 @@ function drawOilDrum(ctx, x, y, w, h) {
   ctx.restore();
 }
 
-// 10) 도톰하고 통통한 앙증맞은 3D 카툰 바나나 껍질 (이전 귀여운 스타일 베이스)
+// 10) 길바닥에 부드럽고 도톰하게 누워있는 3D 미끄러운 바나나 껍질 (표창 느낌 완전 제거!)
 function drawPuddle(ctx, x, y, w, h) {
   ctx.save();
   ctx.translate(x, y);
 
-  // 아까의 앙증맞고 적당한 76% 시각 크기 스케일
-  ctx.scale(0.76, 0.76);
+  // 도로 위 보기 좋은 적정 미니 스케일
+  ctx.scale(0.82, 0.82);
 
-  // 1. 바닥 접지 그림자
+  // 1. 바닥의 부드럽고 둥근 접지 그림자
   ctx.fillStyle = 'rgba(0, 0, 0, 0.16)';
   ctx.beginPath();
-  ctx.ellipse(0, h / 2 - 1, w * 0.52, 4.5, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, h * 0.2, w * 0.48, h * 0.22, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  const BORDER_COLOR = '#5E2605'; // 짙은 초콜릿 브라운 외곽선
-  ctx.strokeStyle = BORDER_COLOR;
-  ctx.lineWidth = 2.6;
+  const BORDER = '#5E2605'; // 따뜻한 초콜릿 다크 브라운
+  ctx.strokeStyle = BORDER;
+  ctx.lineWidth = 2.5;
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
 
-  // 2. 사방으로 도톰하고 통통하게 펼쳐진 바나나 껍질 4자락 (볼륨감 보정)
-  const peels = [
-    { angle: -0.35, len: w * 0.48, cur: -0.52 },
-    { angle: 1.25,  len: w * 0.46, cur: 0.54 },
-    { angle: 2.75,  len: w * 0.50, cur: -0.48 },
-    { angle: 4.25,  len: w * 0.44, cur: 0.50 }
-  ];
-
-  peels.forEach(p => {
-    ctx.save();
-    ctx.rotate(p.angle);
-
-    // 노란 바나나 겉면 (도톰하게 곡률 확대)
-    ctx.fillStyle = '#FFC048';
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.quadraticCurveTo(p.len * 0.5, p.cur * 18, p.len, 0);
-    ctx.quadraticCurveTo(p.len * 0.5, p.cur * -13, 0, 0);
-    ctx.fill();
-    ctx.stroke();
-
-    // 껍질 안쪽 부드러운 유백색 속면 (도톰한 볼륨)
-    ctx.fillStyle = '#FFF9E6';
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.quadraticCurveTo(p.len * 0.4, p.cur * 11, p.len * 0.82, 0);
-    ctx.quadraticCurveTo(p.len * 0.4, p.cur * -7, 0, 0);
-    ctx.fill();
-
-    ctx.restore();
-  });
-
-  // 3. 도톰한 중앙 바나나 속살 뭉치
-  ctx.fillStyle = '#FFEAA7';
+  // 2. [뒤쪽 좌측 둥근 껍질 날개] - 뾰족함 없는 둥글둥글한 곡면
+  ctx.fillStyle = '#FFAA00';
   ctx.beginPath();
-  ctx.arc(0, 0, 5.2, 0, Math.PI * 2);
+  ctx.moveTo(-w * 0.05, -h * 0.08);
+  ctx.bezierCurveTo(-w * 0.25, -h * 0.3, -w * 0.48, -h * 0.15, -w * 0.42, h * 0.08);
+  ctx.bezierCurveTo(-w * 0.35, h * 0.22, -w * 0.12, h * 0.1, 0, 0);
+  ctx.closePath();
   ctx.fill();
   ctx.stroke();
 
-  // 상단 바나나 통통한 초록 줄기 꼭지
+  // 뒤쪽 좌측 껍질 안쪽 부드러운 크림 속살
+  ctx.fillStyle = '#FFF9E6';
+  ctx.beginPath();
+  ctx.moveTo(-w * 0.08, -h * 0.05);
+  ctx.bezierCurveTo(-w * 0.22, -h * 0.2, -w * 0.4, -h * 0.08, -w * 0.35, h * 0.05);
+  ctx.bezierCurveTo(-w * 0.28, h * 0.14, -w * 0.12, h * 0.06, 0, 0);
+  ctx.closePath();
+  ctx.fill();
+
+  // 3. [뒤쪽 우측 둥근 껍질 날개]
+  ctx.fillStyle = '#FF9F00';
+  ctx.beginPath();
+  ctx.moveTo(w * 0.05, -h * 0.08);
+  ctx.bezierCurveTo(w * 0.25, -h * 0.3, w * 0.48, -h * 0.12, w * 0.44, h * 0.1);
+  ctx.bezierCurveTo(w * 0.35, h * 0.24, w * 0.12, h * 0.1, 0, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // 4. [앞쪽 전면 메인 볼록 둥근 껍질] - 볼륨감이 살아있는 오동통한 껍질
+  ctx.fillStyle = '#FFD000';
+  ctx.beginPath();
+  ctx.moveTo(-w * 0.15, -h * 0.15);
+  ctx.bezierCurveTo(-w * 0.35, h * 0.05, -w * 0.4, h * 0.38, -w * 0.2, h * 0.45);
+  ctx.bezierCurveTo(w * 0.05, h * 0.5, w * 0.3, h * 0.35, w * 0.25, h * 0.1);
+  ctx.bezierCurveTo(w * 0.2, -h * 0.05, -w * 0.02, -h * 0.18, -w * 0.15, -h * 0.15);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // 메인 껍질 안쪽 오목하고 부드러운 크림면 (볼륨감 포인트)
+  ctx.fillStyle = '#FFF59D';
+  ctx.beginPath();
+  ctx.moveTo(-w * 0.12, -h * 0.08);
+  ctx.bezierCurveTo(-w * 0.28, h * 0.05, -w * 0.32, h * 0.32, -w * 0.15, h * 0.38);
+  ctx.bezierCurveTo(w * 0.05, h * 0.42, w * 0.22, h * 0.28, w * 0.18, h * 0.08);
+  ctx.bezierCurveTo(w * 0.12, -h * 0.05, -w * 0.02, -h * 0.08, -w * 0.12, -h * 0.08);
+  ctx.closePath();
+  ctx.fill();
+
+  // 볼록한 껍질 라인의 부드러운 윤기 하이라이트 (미끄러운 윤기)
+  ctx.fillStyle = '#FFFFFF';
+  ctx.globalAlpha = 0.5;
+  ctx.beginPath();
+  ctx.ellipse(-w * 0.18, h * 0.1, 4, 2.2, -0.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1.0;
+
+  // 5. 상단 앙증맞고 통통한 줄기 꼭지 (Stem)
   ctx.fillStyle = '#2ED573';
   ctx.beginPath();
-  ctx.roundRect(-3, -h * 0.45, 6, 8, 2.5);
+  ctx.moveTo(-w * 0.06, -h * 0.15);
+  ctx.quadraticCurveTo(-w * 0.02, -h * 0.38, w * 0.08, -h * 0.42);
+  ctx.lineTo(w * 0.16, -h * 0.36);
+  ctx.quadraticCurveTo(w * 0.08, -h * 0.28, w * 0.06, -h * 0.12);
+  ctx.closePath();
   ctx.fill();
   ctx.stroke();
 
-  // 4. 미끄럼 경고 노란 반짝이 펄스
-  const pulse = Math.sin(Date.now() / 140) * 1.5;
-  ctx.fillStyle = '#FFD32A';
+  // 줄기 단면 갈색 원형 컷
+  ctx.fillStyle = '#4A1E04';
   ctx.beginPath();
-  ctx.arc(-w * 0.32, -h * 0.22, 2.3 + pulse, 0, Math.PI * 2);
-  ctx.arc(w * 0.35, h * 0.18, 1.9 + pulse, 0, Math.PI * 2);
+  ctx.ellipse(w * 0.12, -h * 0.39, 2.8, 1.8, 0.3, 0, Math.PI * 2);
   ctx.fill();
+  ctx.stroke();
 
   ctx.restore();
 }
