@@ -692,88 +692,88 @@ function drawOilDrum(ctx, x, y, w, h) {
   ctx.restore();
 }
 
-// 10) 참고 이미지(바나나.png) 기반 3D 카툰 미니 바나나 껍질 (앙증맞고 귀여운 크기)
+// 10) 참고 이미지(바나나.png) 비율과 100% 동일하게 정밀 피팅된 3D 카툰 바나나 껍질
 function drawPuddle(ctx, x, y, w, h) {
   ctx.save();
   ctx.translate(x, y);
 
-  // 앙증맞고 귀여운 76% 시각 크기 스케일 조정
-  ctx.scale(0.76, 0.76);
+  // 참고 이미지와 1:1 동일 비율 스케일링
+  const scale = (w / 38);
+  ctx.scale(scale, scale);
 
   // 1. 바닥 접지 그림자
   ctx.fillStyle = 'rgba(0, 0, 0, 0.16)';
   ctx.beginPath();
-  ctx.ellipse(0, h / 2 - 2, w * 0.5, 4, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, 10, 18, 4, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  const BORDER_COLOR = '#5E2605'; // 짙은 초콜릿 브라운 외곽선
-  ctx.strokeStyle = BORDER_COLOR;
-  ctx.lineWidth = 2.4;
+  const BORDER = '#5E2605'; // 짙은 초콜릿 브라운 외곽선
+  ctx.strokeStyle = BORDER;
+  ctx.lineWidth = 1.8;
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
 
-  // 2. 뒤쪽/오른쪽 껍질 자락들 (어두운 주황 오렌지 셰이딩)
-  // 뒤쪽 오른쪽 껍질
-  ctx.fillStyle = '#FF9F00';
-  ctx.beginPath();
-  ctx.moveTo(2, -h * 0.15);
-  ctx.bezierCurveTo(w * 0.28, -h * 0.2, w * 0.48, -h * 0.05, w * 0.45, h * 0.15);
-  ctx.bezierCurveTo(w * 0.32, h * 0.25, w * 0.15, h * 0.08, 0, 0);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-
-  // 뒤쪽 왼쪽 껍질
+  // 2. [D] 뒤쪽 왼쪽 껍질 (약간 짙은 오렌지 셰이딩)
   ctx.fillStyle = '#FFAA00';
   ctx.beginPath();
-  ctx.moveTo(-2, -h * 0.1);
-  ctx.bezierCurveTo(-w * 0.23, -h * 0.25, -w * 0.45, -h * 0.1, -w * 0.42, h * 0.08);
-  ctx.bezierCurveTo(-w * 0.28, h * 0.18, -w * 0.1, h * 0.02, 0, 0);
+  ctx.moveTo(-3, -2);
+  ctx.bezierCurveTo(-10, -7, -16, -5, -17, -2);
+  ctx.bezierCurveTo(-18, 1, -12, 4, -4, 2);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
 
-  // 오른쪽 앞쪽 껍질
-  ctx.fillStyle = '#FFB300';
+  // 3. [C] 뒤쪽 오른쪽 껍질 (약간 짙은 오렌지 셰이딩)
+  ctx.fillStyle = '#FF9F00';
   ctx.beginPath();
-  ctx.moveTo(3, -h * 0.2);
-  ctx.bezierCurveTo(w * 0.23, -h * 0.05, w * 0.48, h * 0.22, w * 0.42, h * 0.35);
-  ctx.bezierCurveTo(w * 0.23, h * 0.42, w * 0.1, h * 0.15, 0, 0);
+  ctx.moveTo(3, -2);
+  ctx.bezierCurveTo(10, -7, 16, -5, 17, -2);
+  ctx.bezierCurveTo(18, 1, 12, 4, 4, 2);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
 
-  // 3. 전면 메인 왼쪽 껍질 (쨍한 옐로우 + 원형 하이라이트)
-  ctx.fillStyle = '#FFD000';
-  ctx.beginPath();
-  ctx.moveTo(0, -h * 0.25);
-  ctx.bezierCurveTo(-w * 0.16, -h * 0.05, -w * 0.48, h * 0.25, -w * 0.44, h * 0.42);
-  ctx.bezierCurveTo(-w * 0.25, h * 0.48, -w * 0.08, h * 0.2, 0, 0);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-
-  // 메인 껍질 퐁퐁 하이라이트 Spot
-  ctx.fillStyle = '#FFF375';
-  ctx.beginPath();
-  ctx.ellipse(-w * 0.11, -h * 0.15, 3.2, 2.0, -0.4, 0, Math.PI * 2);
-  ctx.fill();
-
-  // 4. 위로 길게 솟아 꺾인 바나나 줄기 꼭지 (Stem)
+  // 4. [B] 앞쪽 오른쪽 껍질 (맑은 옐로우 오렌지)
   ctx.fillStyle = '#FFC000';
   ctx.beginPath();
-  ctx.moveTo(-3.5, -h * 0.2);
-  ctx.quadraticCurveTo(-1, -h * 0.4, 3, -h * 0.46);
-  ctx.lineTo(7.5, -h * 0.4);
-  ctx.quadraticCurveTo(3, -h * 0.33, 3, -h * 0.18);
+  ctx.moveTo(1, -2);
+  ctx.bezierCurveTo(6, 2, 14, 6, 18, 9);
+  ctx.bezierCurveTo(15, 12, 8, 9, 0, 3);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
 
-  // 줄기 단면 갈색 원형 컷 (Stem Top Cut)
+  // 5. [A] 전면 메인 왼쪽 껍질 (길고 완만한 비비드 옐로우)
+  ctx.fillStyle = '#FFD000';
+  ctx.beginPath();
+  ctx.moveTo(-1, -4);
+  ctx.bezierCurveTo(-6, 2, -12, 8, -19, 10);
+  ctx.bezierCurveTo(-18, 13, -11, 11, -1, 3);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // 메인 껍질 윗부분 맑은 연노랑 원형 퐁퐁 하이라이트 Spot
+  ctx.fillStyle = '#FFF580';
+  ctx.beginPath();
+  ctx.ellipse(-7, 2, 2.5, 1.6, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 6. 상단 중앙 위로 솟아 오른쪽으로 부드럽게 꺾인 굵은 줄기 (Central Stem)
+  ctx.fillStyle = '#FFD000';
+  ctx.beginPath();
+  ctx.moveTo(-4, -4);
+  ctx.bezierCurveTo(-2, -10, 1, -14, 5, -16);
+  ctx.lineTo(8, -14);
+  ctx.bezierCurveTo(5, -12, 3, -8, 2, -3);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // 줄기 오른쪽 위를 향한 짙은 갈색 원형 커팅 단면
   ctx.fillStyle = '#4A1E04';
   ctx.beginPath();
-  ctx.ellipse(5.2, -h * 0.43, 3.0, 1.8, 0.4, 0, Math.PI * 2);
+  ctx.ellipse(6.5, -15, 2.2, 1.3, 0.4, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
 
