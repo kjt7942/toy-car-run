@@ -303,6 +303,8 @@ let slipperyTime = 0;
 const SLIPPERY_DURATION = 150;  // 2.5초
 const SLIPPERY_FRICTION = 0.93; // 1에 가까울수록 잘 안 멈춘다 = 미끄러짐
 const SLIPPERY_ACC = 0.26;      // 접지력을 잃어 가속이 붙지 않는다
+const SPIN_MAX_SPEED = 0.22;    // 미끄러지는 동안 최고 회전 속도 (라디안/프레임)
+const SPIN_DECAY = 0.85;        // 미끄럼이 끝난 뒤 회전이 잦아드는 비율
 
 // 코인 2배 보너스 게이트를 통과했을 때의 잔여 시간
 let bonusTime = 0;
@@ -1062,6 +1064,7 @@ function startGame(daily = false) {
   car.x = GAME_WIDTH / 2;
   car.vx = 0;
   car.angle = 0;
+  car.spin = 0;
   car.wheelRotation = 0;
   
   obstacles = [];
@@ -1286,9 +1289,9 @@ function handleCollision(obsIndex) {
       shakeAmount = 4;
     } else {
       playSound('splash');
-      createCrashParticles(obs.x, obs.y, '#74B9FF');
+      createCrashParticles(obs.x, obs.y, '#FFD32A');
       slipperyTime = SLIPPERY_DURATION;
-      addFloatingText(car.x, car.y - 40, "미끄덩!", "#74B9FF");
+      addFloatingText(car.x, car.y - 40, "미끄덩!", "#FFD32A");
       shakeTime = 6;
       shakeAmount = 3;
     }
@@ -1810,7 +1813,9 @@ const PATTERNS = [
   {
     // 횡단: 사람이나 동물이 길을 건넌다. 치면 경찰 추격이 시작되므로 반드시 비켜줘야 한다.
     // 부수는 대상이 아니라 "지나갈 때까지 기다리는" 대상이라 다른 패턴과 결이 다르다.
-    name: 'crossing', minLevel: 3, weight: 10, growth: 0.03,
+    // 가중치가 낮아 실제로는 거의 안 나온다는 피드백을 반영해 상향 (10 -> 20, 다른 패턴들과
+    // 비슷한 빈도가 되도록. growth도 같이 올려 레벨이 올라도 계속 자주 나오게 한다.
+    name: 'crossing', minLevel: 3, weight: 20, growth: 0.05,
     build() {
       const fromLeft = Math.random() < 0.5;
       pushCrosser(Math.random() < 0.5 ? 'walker' : 'critter', fromLeft);
@@ -1969,6 +1974,18 @@ function update(dt = 1.0) {
   }
 
   car.vx *= Math.pow(frictionNow, moveSpeedModifier);
+
+  // 바나나를 밟으면 조작과 별개로 빙글빙글 돈다. 회전 속도는 남은 미끄럼 시간에 비례해
+  // 처음엔 빠르게 돌다가 그립을 되찾을수록 잦아들고, 다 돌고 나면 원래 각도로 감쇠한다.
+  if (isSlippery) {
+    car.spin += SPIN_MAX_SPEED * (slipperyTime / SLIPPERY_DURATION) * moveSpeedModifier;
+    car.spin %= Math.PI * 2;
+  } else if (Math.abs(car.spin) > 0.001) {
+    car.spin *= Math.pow(SPIN_DECAY, moveSpeedModifier);
+  } else {
+    car.spin = 0;
+  }
+
   const maxVxWithDt = car.maxVx;
   if (car.vx > maxVxWithDt) car.vx = maxVxWithDt;
   if (car.vx < -maxVxWithDt) car.vx = -maxVxWithDt;
