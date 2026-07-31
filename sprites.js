@@ -167,7 +167,7 @@ function drawWindmill(ctx, x, y, rot) {
   ctx.fillStyle = '#FFD32A';
   ctx.beginPath();
   ctx.moveTo(x - 6, y - 9);
-  ctx.lineTo(0, y - 18);
+  ctx.lineTo(x, y - 18);
   ctx.lineTo(x + 6, y - 9);
   ctx.closePath();
   ctx.fill();
