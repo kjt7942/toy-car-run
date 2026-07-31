@@ -1330,62 +1330,70 @@ function drawGate(ctx, x, y, w, h, bonus) {
   ctx.restore();
 }
 
-// 15) 기름얼룩이 화면에 팍~ 튀었다가 아래로 스르륵 흘러내리는 3D 오일 스패터 효과 (Dripping Oil)
+// 15) 드럼통 충돌 시 화면 중앙 및 도로 전체 공간에 넓게 팍~ 튀었다가 흘러내리는 대형 3D 오일 효과
 function drawScreenOilSplatter(ctx, oil) {
   ctx.save();
 
-  // 180 ~ 0 수명 카운트에 맞춰 기름이 아래로 주르륵 흘러내리는 위치 계산
+  // 드럼통 위치에 무관하게 화면 중앙 공간을 중심으로 넓게 연출
+  const centerX = 180; // 화면 중앙 X
+  const centerY = 240; // 화면 중앙 Y 부근
   const elapsed = 180 - (oil.life || 180);
-  const dripY = oil.y + elapsed * 0.55; // 화면 아래로 부드럽게 흘러내리는 속도
-  const r = oil.radius * 1.1;
+  const dripY = centerY + elapsed * 0.7; // 아래로 스르륵 흘러내리는 위치
+  const r = oil.radius * 2.8; // 도로 전체 공간을 가리는 넓은 대형 스케일
 
-  ctx.globalAlpha = oil.alpha || 1.0;
+  ctx.globalAlpha = (oil.alpha || 1.0) * 0.88; // 묵직하고 시원시원한 반투명 톤
 
-  // 1. 짙고 끈적한 차콜 메탈릭 오일 그라데이션 광채
-  const oilGrad = ctx.createRadialGradient(oil.x - r * 0.3, dripY - r * 0.3, r * 0.1, oil.x, dripY, r * 1.5);
-  oilGrad.addColorStop(0, '#485460');
-  oilGrad.addColorStop(0.65, '#1E272E');
-  oilGrad.addColorStop(1, '#0F1419');
+  // 1. 넓은 대형 오일 메탈릭 차콜 그라데이션
+  const oilGrad = ctx.createRadialGradient(centerX - r * 0.2, dripY - r * 0.2, r * 0.1, centerX, dripY, r * 1.6);
+  oilGrad.addColorStop(0, 'rgba(40, 48, 56, 0.95)');
+  oilGrad.addColorStop(0.5, 'rgba(25, 32, 38, 0.92)');
+  oilGrad.addColorStop(0.85, 'rgba(15, 20, 25, 0.88)');
+  oilGrad.addColorStop(1, 'rgba(10, 14, 18, 0.8)');
 
   ctx.fillStyle = oilGrad;
   ctx.strokeStyle = '#0F1419';
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 2.5;
 
-  // 2. 화면에 팍~! 튄 오일 스패터 메인 덩어리
+  // 2. 화면 중앙을 시원하게 덮는 메인 대형 기름얼룩 덩어리들 (Broad Oil Splatter)
   ctx.beginPath();
-  ctx.arc(oil.x, dripY, r, 0, Math.PI * 2);
-  ctx.arc(oil.x - r * 0.5, dripY + r * 0.25, r * 0.55, 0, Math.PI * 2);
-  ctx.arc(oil.x + r * 0.55, dripY - r * 0.3, r * 0.48, 0, Math.PI * 2);
-  ctx.arc(oil.x + r * 0.2, dripY + r * 0.55, r * 0.45, 0, Math.PI * 2);
-  ctx.arc(oil.x - r * 0.3, dripY - r * 0.45, r * 0.42, 0, Math.PI * 2);
+  ctx.arc(centerX, dripY, r, 0, Math.PI * 2);
+  ctx.arc(centerX - r * 0.55, dripY + r * 0.2, r * 0.65, 0, Math.PI * 2);
+  ctx.arc(centerX + r * 0.6, dripY - r * 0.25, r * 0.58, 0, Math.PI * 2);
+  ctx.arc(centerX + r * 0.25, dripY + r * 0.6, r * 0.52, 0, Math.PI * 2);
+  ctx.arc(centerX - r * 0.35, dripY - r * 0.5, r * 0.48, 0, Math.PI * 2);
+  ctx.arc(centerX + r * 0.8, dripY + r * 0.1, r * 0.38, 0, Math.PI * 2);
+  ctx.arc(centerX - r * 0.75, dripY - r * 0.1, r * 0.42, 0, Math.PI * 2);
   ctx.fill();
 
-  // 3. 아래로 주르륵 흘러내리는 기름 물줄기 3가닥 (Dripping Oil Drops)
+  // 3. 도로 전체 공간으로 길게 스르륵 흘러내리는 대형 오일 물줄기 5가닥 (Big Oil Dripping Drops)
   const dripOffsets = [
-    { dx: -r * 0.45, len: elapsed * 0.75 + r * 0.9, w: r * 0.32 },
-    { dx: 0,        len: elapsed * 0.95 + r * 1.3, w: r * 0.38 },
-    { dx: r * 0.42, len: elapsed * 0.65 + r * 0.8, w: r * 0.28 }
+    { dx: -r * 0.65, len: elapsed * 0.8 + r * 1.1, w: r * 0.3 },
+    { dx: -r * 0.3,  len: elapsed * 1.1 + r * 1.5, w: r * 0.38 },
+    { dx: 0,         len: elapsed * 1.35 + r * 1.8, w: r * 0.42 },
+    { dx: r * 0.35,  len: elapsed * 1.05 + r * 1.4, w: r * 0.35 },
+    { dx: r * 0.7,   len: elapsed * 0.75 + r * 1.0, w: r * 0.28 }
   ];
 
   dripOffsets.forEach(d => {
     ctx.beginPath();
-    ctx.moveTo(oil.x + d.dx - d.w / 2, dripY + r * 0.3);
-    ctx.lineTo(oil.x + d.dx - d.w / 3, dripY + d.len);
-    ctx.arc(oil.x + d.dx, dripY + d.len + d.w / 2, d.w / 2, 0, Math.PI);
-    ctx.lineTo(oil.x + d.dx + d.w / 2, dripY + r * 0.3);
+    ctx.moveTo(centerX + d.dx - d.w / 2, dripY + r * 0.3);
+    ctx.lineTo(centerX + d.dx - d.w / 3, dripY + d.len);
+    ctx.arc(centerX + d.dx, dripY + d.len + d.w / 2, d.w / 2, 0, Math.PI);
+    ctx.lineTo(centerX + d.dx + d.w / 2, dripY + r * 0.3);
     ctx.closePath();
     ctx.fill();
   });
 
-  // 4. 기름 표면의 찰랑이는 흰색 하이라이트 윤기 (Shine Reflection)
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+  // 4. 넓은 오일 표면의 부드러운 하이라이트 윤기 (Reflective Oil Gloss)
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
   ctx.beginPath();
-  ctx.ellipse(oil.x - r * 0.35, dripY - r * 0.35, r * 0.35, r * 0.2, -0.4, 0, Math.PI * 2);
+  ctx.ellipse(centerX - r * 0.35, dripY - r * 0.35, r * 0.4, r * 0.22, -0.4, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
   ctx.beginPath();
-  ctx.arc(oil.x + r * 0.32, dripY + r * 0.32, r * 0.16, 0, Math.PI * 2);
+  ctx.arc(centerX + r * 0.35, dripY + r * 0.35, r * 0.18, 0, Math.PI * 2);
+  ctx.arc(centerX - r * 0.5, dripY + r * 0.15, r * 0.12, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.restore();
