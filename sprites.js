@@ -692,73 +692,83 @@ function drawOilDrum(ctx, x, y, w, h) {
   ctx.restore();
 }
 
-// 10) 위에서 내려다본, 활짝 벗겨져 펼쳐진 바나나 껍질
-// 누운 통바나나(초승달) 버전이 "바나나가 아니라 그냥 초승달 같다"는 피드백으로,
-// 중심 허브에서 3갈래 껍질이 펼쳐진 탑뷰로 다시 그렸다. 조각 사이에 빈틈이 생기지
-// 않도록 각 조각을 "중심->제어점->끝점" 대칭 2쿼드러틱 렌즈 모양으로 그린다.
-// 와이드 박스(54x26)에 맞춰 세로만 눌러서 그리므로, 아래 petal 각도/길이는
-// 누르기 전 원형 좌표계 기준이다.
+// 10) 꼭지가 위로 올라간 채 3갈래로 벌어져 길바닥에 떨어진 바나나 껍질
+// 사방으로 고르게 펼쳐진 탑뷰 버전 다음으로, "꼭지가 위로 올라간 걸 표현해달라"는
+// 요청으로 다시 그렸다. 허브를 위쪽에 두고 3조각은 전부 그 아래로 늘어지게, 허브
+// 위로는 짧은 줄기(꼭지)가 솟아 있게 그린다. 조각 자체는 이전과 같은 "허브->대칭
+// 제어점->끝점" 2쿼드러틱 렌즈 모양(빈틈 없이 이어짐)을 그대로 쓴다.
 function drawPuddle(ctx, x, y, w, h) {
   ctx.save();
   ctx.translate(x, y);
 
   // 바닥 그림자
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
   ctx.beginPath();
-  ctx.ellipse(0, h * 0.06, w * 0.46, h * 0.4, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, h * 0.22, w * 0.46, h * 0.3, 0, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.strokeStyle = OUTLINE_COLOR;
   ctx.lineWidth = OUTLINE_WIDTH;
   ctx.lineJoin = 'round';
 
-  const squash = Math.min(0.62, (h * 0.94) / w);
+  const squash = Math.min(0.66, (h * 0.98) / w);
   ctx.save();
   ctx.scale(1, squash);
 
-  const L = w * 0.46; // 중심 ~ 껍질 끝 길이
+  const hubY = -w * 0.18; // 허브(꼭지 붙는 자리)를 위쪽에 둔다
+  const L = w * 0.42;
 
   function petal(angleDeg, halfWidth, len, color) {
     const a = angleDeg * Math.PI / 180;
     const dx = Math.cos(a), dy = Math.sin(a);
     const px = -dy, py = dx;
-    const tipX = dx * len, tipY = dy * len;
-    const midX = dx * len * 0.4, midY = dy * len * 0.4;
+    const tipX = dx * len, tipY = hubY + dy * len;
+    const midX = dx * len * 0.42, midY = hubY + dy * len * 0.42;
 
     ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.moveTo(0, 0);
+    ctx.moveTo(0, hubY);
     ctx.quadraticCurveTo(midX + px * halfWidth, midY + py * halfWidth, tipX, tipY);
-    ctx.quadraticCurveTo(midX - px * halfWidth, midY - py * halfWidth, 0, 0);
+    ctx.quadraticCurveTo(midX - px * halfWidth, midY - py * halfWidth, 0, hubY);
     ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    // 끝의 갈색 꼭지 캡 (과육에 붙어 있던 자리)
-    ctx.fillStyle = '#5E2605';
-    ctx.beginPath();
-    ctx.ellipse(tipX, tipY, 3, 2.2, a, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
   }
 
-  // 뒤쪽부터 그려서 겹치는 순서가 자연스럽다
-  petal(-155, L * 0.34, L * 0.92, '#FFC300');
-  petal(15, L * 0.36, L, '#FFD000');
-  petal(120, L * 0.30, L * 0.8, '#FFC800');
+  // 아래쪽으로 펼쳐진 3갈래 (좌하 / 정하 / 우하)
+  petal(150, L * 0.36, L * 0.95, '#FFC300');
+  petal(90, L * 0.34, L, '#FFD000');
+  petal(35, L * 0.34, L * 0.9, '#FFC800');
 
-  // 중심 허브 (세 조각이 갈라지는 지점)
-  ctx.fillStyle = '#B8860B';
+  // 가운데 큰 조각 위 광택 하이라이트
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
   ctx.beginPath();
-  ctx.arc(0, 0, 3.6, 0, Math.PI * 2);
+  ctx.ellipse(0, hubY + L * 0.42, L * 0.14, L * 0.28, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 위로 솟은 꼭지(줄기)
+  ctx.fillStyle = '#6B4226';
+  ctx.beginPath();
+  ctx.moveTo(-3, hubY + 2);
+  ctx.quadraticCurveTo(-2.5, hubY - L * 0.55, 0, hubY - L * 0.62);
+  ctx.quadraticCurveTo(2.5, hubY - L * 0.55, 3, hubY + 2);
+  ctx.closePath();
   ctx.fill();
   ctx.stroke();
 
-  // 가장 큰(앞쪽) 껍질 위 광택 하이라이트
-  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  // 꼭지 끝 마디
+  ctx.fillStyle = '#4A2E18';
   ctx.beginPath();
-  ctx.ellipse(L * 0.4, 0, L * 0.16, 3, 15 * Math.PI / 180, 0, Math.PI * 2);
+  ctx.ellipse(0, hubY - L * 0.62, 3.4, 2.4, 0, 0, Math.PI * 2);
   ctx.fill();
+  ctx.stroke();
+
+  // 중심 허브
+  ctx.fillStyle = '#B8860B';
+  ctx.beginPath();
+  ctx.arc(0, hubY, 3.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
 
   ctx.restore(); // squash
 
@@ -1416,24 +1426,4 @@ function drawScreenOilSplatter(ctx, oil) {
   ctx.fill();
 
   ctx.restore();
-}
-
-// game.js의 draw() 루프 직후 화면에 오일이 팍~ 튀었다가 흘러내리는 연출을 자동 덧칠하는 훅
-if (typeof window !== 'undefined') {
-  window.drawScreenOilSplatter = drawScreenOilSplatter;
-
-  window.addEventListener('load', () => {
-    if (typeof window.draw === 'function') {
-      const originalDraw = window.draw;
-      window.draw = function() {
-        originalDraw.apply(this, arguments);
-
-        if (typeof screenOils !== 'undefined' && screenOils.length > 0 && typeof ctx !== 'undefined') {
-          screenOils.forEach(oil => {
-            drawScreenOilSplatter(ctx, oil);
-          });
-        }
-      };
-    }
-  });
 }
