@@ -628,8 +628,14 @@ function playSound(type) {
 
 // 1. 캔버스 해상도 조절
 function resizeCanvas() {
-  canvas.width = GAME_WIDTH;
-  canvas.height = GAME_HEIGHT;
+  // 캔버스는 360x640으로 그려서 CSS로 화면 크기만큼 늘리는 구조라, 고해상도 기기에서는
+  // 3배 가까이 확대되어 선이 뭉개지고 스크롤이 계단처럼 떨려 보인다.
+  // 내부 픽셀만 화면 밀도에 맞춰 늘리고 좌표계는 setTransform으로 360x640 그대로 유지한다.
+  // (그리는 코드는 한 줄도 안 바뀐다.) 저사양 기기 부하를 감안해 2배까지만.
+  const dpr = typeof window.devicePixelRatio === 'number' ? Math.min(window.devicePixelRatio, 2) : 1;
+  canvas.width = GAME_WIDTH * dpr;
+  canvas.height = GAME_HEIGHT * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
 // 2. 키보드 입력 핸들링
