@@ -692,10 +692,12 @@ function drawOilDrum(ctx, x, y, w, h) {
   ctx.restore();
 }
 
-// 10) 길바닥에 부드럽고 도톰하게 누워있는 3D 미끄러운 바나나 껍질 (표창 느낌 완전 제거!)
-// 여러 겹 껍질 자락으로 그렸던 이전 버전이 작은 크기에서 뭉개져 알아보기 어렵다는
-// 피드백으로, 누운 초승달 모양 통바나나 한 덩어리로 단순화했다. 실루엣 하나 + 양끝
-// 꼭지 + 광택 줄기만으로 고속 스크롤 중에도 즉시 "바나나"로 읽히는 걸 목표로 했다.
+// 10) 위에서 내려다본, 활짝 벗겨져 펼쳐진 바나나 껍질
+// 누운 통바나나(초승달) 버전이 "바나나가 아니라 그냥 초승달 같다"는 피드백으로,
+// 중심 허브에서 3갈래 껍질이 펼쳐진 탑뷰로 다시 그렸다. 조각 사이에 빈틈이 생기지
+// 않도록 각 조각을 "중심->제어점->끝점" 대칭 2쿼드러틱 렌즈 모양으로 그린다.
+// 와이드 박스(54x26)에 맞춰 세로만 눌러서 그리므로, 아래 petal 각도/길이는
+// 누르기 전 원형 좌표계 기준이다.
 function drawPuddle(ctx, x, y, w, h) {
   ctx.save();
   ctx.translate(x, y);
@@ -703,45 +705,62 @@ function drawPuddle(ctx, x, y, w, h) {
   // 바닥 그림자
   ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
   ctx.beginPath();
-  ctx.ellipse(0, h * 0.36, w * 0.44, h * 0.16, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, h * 0.06, w * 0.46, h * 0.4, 0, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.strokeStyle = OUTLINE_COLOR;
   ctx.lineWidth = OUTLINE_WIDTH;
   ctx.lineJoin = 'round';
 
-  // 몸통: 위쪽은 크게 휘고 아래쪽은 완만한 초승달. 두 곡선만으로 깔끔하게.
-  ctx.fillStyle = '#FFD000';
+  const squash = Math.min(0.62, (h * 0.94) / w);
+  ctx.save();
+  ctx.scale(1, squash);
+
+  const L = w * 0.46; // 중심 ~ 껍질 끝 길이
+
+  function petal(angleDeg, halfWidth, len, color) {
+    const a = angleDeg * Math.PI / 180;
+    const dx = Math.cos(a), dy = Math.sin(a);
+    const px = -dy, py = dx;
+    const tipX = dx * len, tipY = dy * len;
+    const midX = dx * len * 0.4, midY = dy * len * 0.4;
+
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(midX + px * halfWidth, midY + py * halfWidth, tipX, tipY);
+    ctx.quadraticCurveTo(midX - px * halfWidth, midY - py * halfWidth, 0, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // 끝의 갈색 꼭지 캡 (과육에 붙어 있던 자리)
+    ctx.fillStyle = '#5E2605';
+    ctx.beginPath();
+    ctx.ellipse(tipX, tipY, 3, 2.2, a, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  // 뒤쪽부터 그려서 겹치는 순서가 자연스럽다
+  petal(-155, L * 0.34, L * 0.92, '#FFC300');
+  petal(15, L * 0.36, L, '#FFD000');
+  petal(120, L * 0.30, L * 0.8, '#FFC800');
+
+  // 중심 허브 (세 조각이 갈라지는 지점)
+  ctx.fillStyle = '#B8860B';
   ctx.beginPath();
-  ctx.moveTo(-w * 0.47, h * 0.14);
-  ctx.quadraticCurveTo(0, -h * 0.62, w * 0.47, h * 0.06);
-  ctx.quadraticCurveTo(w * 0.2, h * 0.32, -w * 0.1, h * 0.28);
-  ctx.quadraticCurveTo(-w * 0.32, h * 0.26, -w * 0.47, h * 0.14);
-  ctx.closePath();
+  ctx.arc(0, 0, 3.6, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
 
-  // 광택 하이라이트 (윗변을 따라가는 옅은 줄기)
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
-  ctx.lineWidth = 2.2;
-  ctx.lineCap = 'round';
+  // 가장 큰(앞쪽) 껍질 위 광택 하이라이트
+  ctx.fillStyle = 'rgba(255,255,255,0.4)';
   ctx.beginPath();
-  ctx.moveTo(-w * 0.32, h * 0.04);
-  ctx.quadraticCurveTo(0, -h * 0.4, w * 0.3, -h * 0.02);
-  ctx.stroke();
+  ctx.ellipse(L * 0.4, 0, L * 0.16, 3, 15 * Math.PI / 180, 0, Math.PI * 2);
+  ctx.fill();
 
-  // 양쪽 꼭지
-  ctx.fillStyle = '#5E2605';
-  ctx.strokeStyle = OUTLINE_COLOR;
-  ctx.lineWidth = OUTLINE_WIDTH;
-  ctx.beginPath();
-  ctx.ellipse(-w * 0.46, h * 0.13, 3.6, 2.6, Math.PI / 6, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.ellipse(w * 0.46, h * 0.05, 3.6, 2.6, -Math.PI / 8, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
+  ctx.restore(); // squash
 
   ctx.restore();
 }
