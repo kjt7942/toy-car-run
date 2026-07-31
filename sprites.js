@@ -209,7 +209,13 @@ function drawPlayer() {
 
   ctx.save();
   ctx.translate(car.x, car.y);
-  ctx.rotate(car.angle);
+
+  // 바나나/오일 밟았을 때 빙글빙글 360도 스핀 회전 연출
+  let spinAngle = car.angle;
+  if (typeof car !== 'undefined' && car.slipTime > 0) {
+    spinAngle += (car.slipTime * 0.38);
+  }
+  ctx.rotate(spinAngle);
 
   // 1. 그림자 효과 (부스터 시 쨍한 미니멀 글로우)
   if (boosterTime > 0) {
@@ -689,26 +695,74 @@ function drawOilDrum(ctx, x, y, w, h) {
   ctx.restore();
 }
 
-// 10) 맑은 아쿠아 스카이 물웅덩이
+// 10) 쨍하고 귀여운 3D 아케이드 바나나 껍질 (밟으면 미끄러져 빙글빙글 스핀!)
 function drawPuddle(ctx, x, y, w, h) {
   ctx.save();
   ctx.translate(x, y);
 
-  ctx.fillStyle = 'rgba(0, 216, 214, 0.55)';
+  // 바닥 접지 그림자
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.16)';
   ctx.beginPath();
-  ctx.ellipse(0, 0, w / 2, h / 2, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, h * 0.18, w * 0.52, h * 0.26, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.strokeStyle = '#17E9E0';
-  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = OUTLINE_COLOR;
+  ctx.lineWidth = OUTLINE_WIDTH;
+  ctx.lineJoin = 'round';
+
+  // 1. 사방으로 앙증맞게 펼쳐진 바나나 껍질 4자락
+  const peels = [
+    { angle: -0.35, len: w * 0.46, cur: -0.4 },
+    { angle: 1.25,  len: w * 0.44, cur: 0.45 },
+    { angle: 2.75,  len: w * 0.48, cur: -0.35 },
+    { angle: 4.25,  len: w * 0.42, cur: 0.4 }
+  ];
+
+  peels.forEach(p => {
+    ctx.save();
+    ctx.rotate(p.angle);
+
+    // 노란 바나나 겉면
+    ctx.fillStyle = '#FFC048';
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(p.len * 0.5, p.cur * 14, p.len, 0);
+    ctx.quadraticCurveTo(p.len * 0.5, p.cur * -10, 0, 0);
+    ctx.fill();
+    ctx.stroke();
+
+    // 껍질 안쪽 부드러운 유백색 속면
+    ctx.fillStyle = '#FFF9E6';
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(p.len * 0.4, p.cur * 8, p.len * 0.8, 0);
+    ctx.quadraticCurveTo(p.len * 0.4, p.cur * -5, 0, 0);
+    ctx.fill();
+
+    ctx.restore();
+  });
+
+  // 2. 중앙 바나나 속살 뭉치 & 초록 줄기 꼭지
+  ctx.fillStyle = '#FFEAA7';
+  ctx.beginPath();
+  ctx.arc(0, 0, 4.5, 0, Math.PI * 2);
+  ctx.fill();
   ctx.stroke();
 
-  // 찰랑 물결 하이라이트
-  ctx.strokeStyle = '#FFFFFF';
-  ctx.lineWidth = 2;
+  // 상단 바나나 초록 줄기 꼭지
+  ctx.fillStyle = '#2ED573';
   ctx.beginPath();
-  ctx.ellipse(-w * 0.12, -h * 0.12, w * 0.22, h * 0.18, 0, Math.PI * 0.9, Math.PI * 1.95);
+  ctx.roundRect(-2.5, -h * 0.44, 5, 7, 2);
+  ctx.fill();
   ctx.stroke();
+
+  // 3. 미끄럼 깜빡이 경고 반짝이 (펄스 스타)
+  const pulse = Math.sin(Date.now() / 140) * 1.5;
+  ctx.fillStyle = '#FFD32A';
+  ctx.beginPath();
+  ctx.arc(-w * 0.32, -h * 0.22, 2.2 + pulse, 0, Math.PI * 2);
+  ctx.arc(w * 0.35, h * 0.18, 1.8 + pulse, 0, Math.PI * 2);
+  ctx.fill();
 
   ctx.restore();
 }
