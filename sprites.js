@@ -1329,3 +1329,84 @@ function drawGate(ctx, x, y, w, h, bonus) {
 
   ctx.restore();
 }
+
+// 15) 기름얼룩이 화면에 팍~ 튀었다가 아래로 스르륵 흘러내리는 3D 오일 스패터 효과 (Dripping Oil)
+function drawScreenOilSplatter(ctx, oil) {
+  ctx.save();
+
+  // 180 ~ 0 수명 카운트에 맞춰 기름이 아래로 주르륵 흘러내리는 위치 계산
+  const elapsed = 180 - (oil.life || 180);
+  const dripY = oil.y + elapsed * 0.55; // 화면 아래로 부드럽게 흘러내리는 속도
+  const r = oil.radius * 1.1;
+
+  ctx.globalAlpha = oil.alpha || 1.0;
+
+  // 1. 짙고 끈적한 차콜 메탈릭 오일 그라데이션 광채
+  const oilGrad = ctx.createRadialGradient(oil.x - r * 0.3, dripY - r * 0.3, r * 0.1, oil.x, dripY, r * 1.5);
+  oilGrad.addColorStop(0, '#485460');
+  oilGrad.addColorStop(0.65, '#1E272E');
+  oilGrad.addColorStop(1, '#0F1419');
+
+  ctx.fillStyle = oilGrad;
+  ctx.strokeStyle = '#0F1419';
+  ctx.lineWidth = 2;
+
+  // 2. 화면에 팍~! 튄 오일 스패터 메인 덩어리
+  ctx.beginPath();
+  ctx.arc(oil.x, dripY, r, 0, Math.PI * 2);
+  ctx.arc(oil.x - r * 0.5, dripY + r * 0.25, r * 0.55, 0, Math.PI * 2);
+  ctx.arc(oil.x + r * 0.55, dripY - r * 0.3, r * 0.48, 0, Math.PI * 2);
+  ctx.arc(oil.x + r * 0.2, dripY + r * 0.55, r * 0.45, 0, Math.PI * 2);
+  ctx.arc(oil.x - r * 0.3, dripY - r * 0.45, r * 0.42, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 3. 아래로 주르륵 흘러내리는 기름 물줄기 3가닥 (Dripping Oil Drops)
+  const dripOffsets = [
+    { dx: -r * 0.45, len: elapsed * 0.75 + r * 0.9, w: r * 0.32 },
+    { dx: 0,        len: elapsed * 0.95 + r * 1.3, w: r * 0.38 },
+    { dx: r * 0.42, len: elapsed * 0.65 + r * 0.8, w: r * 0.28 }
+  ];
+
+  dripOffsets.forEach(d => {
+    ctx.beginPath();
+    ctx.moveTo(oil.x + d.dx - d.w / 2, dripY + r * 0.3);
+    ctx.lineTo(oil.x + d.dx - d.w / 3, dripY + d.len);
+    ctx.arc(oil.x + d.dx, dripY + d.len + d.w / 2, d.w / 2, 0, Math.PI);
+    ctx.lineTo(oil.x + d.dx + d.w / 2, dripY + r * 0.3);
+    ctx.closePath();
+    ctx.fill();
+  });
+
+  // 4. 기름 표면의 찰랑이는 흰색 하이라이트 윤기 (Shine Reflection)
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+  ctx.beginPath();
+  ctx.ellipse(oil.x - r * 0.35, dripY - r * 0.35, r * 0.35, r * 0.2, -0.4, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+  ctx.beginPath();
+  ctx.arc(oil.x + r * 0.32, dripY + r * 0.32, r * 0.16, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+// game.js의 draw() 루프 직후 화면에 오일이 팍~ 튀었다가 흘러내리는 연출을 자동 덧칠하는 훅
+if (typeof window !== 'undefined') {
+  window.drawScreenOilSplatter = drawScreenOilSplatter;
+
+  window.addEventListener('load', () => {
+    if (typeof window.draw === 'function') {
+      const originalDraw = window.draw;
+      window.draw = function() {
+        originalDraw.apply(this, arguments);
+
+        if (typeof screenOils !== 'undefined' && screenOils.length > 0 && typeof ctx !== 'undefined') {
+          screenOils.forEach(oil => {
+            drawScreenOilSplatter(ctx, oil);
+          });
+        }
+      };
+    }
+  });
+}
