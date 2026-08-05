@@ -75,8 +75,14 @@ const SAVE_KEY = 'toycar_save';
 const LEGACY_KEY = 'toycar_highscore';
 const MAX_RANKS = 5;
 
+// 저장 형식이 바뀔 때 옛 저장값을 알아보기 위한 번호. 형식이 바뀌면 올리고
+// loadSave에서 그 번호를 보고 옮겨 심는다. 지금은 필드 의미가 한 번도 안 바뀌어
+// 하는 일이 없지만, 나중에 넣으려 하면 이미 번호 없는 저장값이 깔려 있어 늦는다.
+const SAVE_VERSION = 1;
+
 function defaultSave() {
   return {
+    version: SAVE_VERSION,
     best: 0,
     scores: [],          // TOP 5 기록
     coins: 0,            // 해금에 쓰는 누적 코인
@@ -101,10 +107,17 @@ function loadSave() {
       if (!Array.isArray(merged.scores)) merged.scores = [];
       if (!Array.isArray(merged.unlocked) || merged.unlocked.length === 0) merged.unlocked = ['classic'];
       if (!merged.achievements || typeof merged.achievements !== 'object') merged.achievements = {};
+      // 점수 도전과제의 id에서 숫자를 걷어냈다. 예전 id로 저장된 달성 기록은 그대로 넘겨받는다
+      // (그때 기준으로는 정당하게 딴 것이므로 기준을 올렸다고 뺏지 않는다).
+      for (const [oldId, newId] of [['score10k', 'scoreMid'], ['score30k', 'scoreHigh']]) {
+        if (merged.achievements[oldId]) merged.achievements[newId] = true;
+        delete merged.achievements[oldId];
+      }
       if (!merged.daily || typeof merged.daily !== 'object') merged.daily = { date: '', best: 0 };
       // 드래그 조작을 걷어내면서 쓰지 않게 된 항목. 남아 있어도 무해하지만 저장값을 깨끗이 둔다.
       delete merged.control;
       delete merged.dragSens;
+      merged.version = SAVE_VERSION;
       return merged;
     }
   } catch (e) {
@@ -131,6 +144,10 @@ function persistSave() {
 
 const save = loadSave();
 const MAX_LIVES = 3;
+// 이번 판의 라이프 상한. 오늘의 도전 '한 번의 기회'는 하트 1개로 시작하는 규칙인데
+// 회복 판정과 하트 UI가 상수 3을 보고 있어서, 하트를 주워 3까지 채울 수 있었다.
+// 그러면 점수 2배 보상이 공짜가 되므로 규칙이 정한 값을 판 내내 상한으로 쓴다.
+let runMaxLives = MAX_LIVES;
 let lives = MAX_LIVES;
 let keys = {};
 let touchLeftPressed = false;
@@ -167,18 +184,24 @@ const MAX_COMBO_MULT = 8;
 // --- [해금 차량 스킨] ---
 // 색만 다르면 차고를 두 번 갈 이유가 없다. 차마다 특성을 하나씩 붙여
 // "더 센 차"가 아니라 "다르게 노는 차"가 되게 한다. 강화 폭은 서로 비슷하게 맞췄다.
+//
+// 가격은 실제 코인 수입에 맞춰 잡았다. 한 판 코인 획득량을 재 보면 125~209개,
+// COIN_VALUE_MULT(1.5)를 거치면 판당 190~315코인이 들어온다. 예전 가격표(600~9000,
+// 합계 19,100)는 전부 모으는 데 70판이 넘어 사실상 닿지 않는 숫자였다.
+// 지금 값은 첫 해금 약 1.5판, 마지막(레인보우) 약 14판, 전부 모으면 약 32판 기준이다.
+// 부활(REVIVE_COST 300)과 값이 겹치므로 "지금 되살릴까, 새 차를 살까"가 매 판 선택이 된다.
 const CARS = [
   { id: 'classic', name: '클래식',   cost: 0,     body: '#FFDE59', stripe: '#FF5757', spoiler: '#2F3640',
     perk: '무난한 기본기' },
-  { id: 'ruby',    name: '루비',     cost: 600,   body: '#FF5757', stripe: '#FFFFFF', spoiler: '#2F3640',
+  { id: 'ruby',    name: '루비',     cost: 300,   body: '#FF5757', stripe: '#FFFFFF', spoiler: '#2F3640',
     perk: '시작할 때 보호막 1개', startShield: true },
-  { id: 'mint',    name: '민트',     cost: 1500,  body: '#00CEC9', stripe: '#FFFFFF', spoiler: '#2F3640',
+  { id: 'mint',    name: '민트',     cost: 700,   body: '#00CEC9', stripe: '#FFFFFF', spoiler: '#2F3640',
     perk: '콤보 지속 +50%', comboBonus: 1.5 },
-  { id: 'shadow',  name: '섀도',     cost: 3000,  body: '#3D4454', stripe: '#FFDE59', spoiler: '#FFDE59',
+  { id: 'shadow',  name: '섀도',     cost: 1300,  body: '#3D4454', stripe: '#FFDE59', spoiler: '#FFDE59',
     perk: '조향 반응 +25%', handling: 1.25 },
-  { id: 'gold',    name: '골드',     cost: 5000,  body: '#FFD700', stripe: '#B8860B', spoiler: '#B8860B',
+  { id: 'gold',    name: '골드',     cost: 2200,  body: '#FFD700', stripe: '#B8860B', spoiler: '#B8860B',
     perk: '코인 점수 +30%', coinBonus: 1.3 },
-  { id: 'rainbow', name: '레인보우', cost: 9000,  body: null,      stripe: '#FFFFFF', spoiler: '#2F3640',
+  { id: 'rainbow', name: '레인보우', cost: 3500,  body: null,      stripe: '#FFFFFF', spoiler: '#2F3640',
     perk: '아이템 지속 +40%', itemBonus: 1.4 }
 ];
 
@@ -212,9 +235,10 @@ let dailyRun = false;
 let activeMod = null;
 let scoreMul = 1;
 
-// 테스트 이벤트: 모든 차량을 기본 차량과 같은 값으로 할인한다.
-// 끄면 원래 가격표로 돌아간다.
-const CAR_SALE = true;
+// 테스트 이벤트: 모든 차량을 기본 차량과 같은 값(0코인)으로 할인한다.
+// 켜 두면 첫 판부터 최상위 퍽까지 전부 고를 수 있어 차고와 코인이 할 일이 없어진다.
+// 퍽을 몰아서 시험해 볼 때만 잠깐 켤 것.
+const CAR_SALE = false;
 function carCost(skin) {
   return CAR_SALE ? CARS[0].cost : skin.cost;
 }
@@ -241,8 +265,12 @@ const ACHIEVEMENTS = [
   { id: 'level10',   icon: '🚀', name: '폭주기관차',    desc: 'LV.10 도달',                 check: (r) => r.level >= 10 },
   { id: 'flawless',  icon: '🛡️', name: '무결점',        desc: '피격 없이 LV.4 도달',        check: (r) => r.level >= 4 && r.damage === 0 },
   { id: 'destroy10', icon: '💣', name: '파괴왕',        desc: '한 판에서 장애물 10개 파괴', check: (r) => r.destroyed >= 10 },
-  { id: 'score10k',  icon: '🏅', name: '만점 돌파',     desc: '30,000점 달성',              check: (r) => r.score >= 30000 },
-  { id: 'score30k',  icon: '👑', name: '전설의 주행',   desc: '80,000점 달성',              check: (r) => r.score >= 80000 },
+  // 주행 점수가 초당 60점 + 레벨 보너스 + 콤보 배수까지 곱해지도록 바뀌면서 점수 스케일이
+  // 크게 올랐는데 기준값은 옛날 그대로였다. 실측으로 30,000점은 38초, 80,000점은 약 60초면
+  // 닿아서 두 개 다 첫 판에 자동으로 열렸다 (평범한 한 판이 20만~43만점).
+  // id에 숫자를 박아 두면 기준을 손볼 때마다 또 어긋나므로 숫자를 뺀 이름으로 바꾼다.
+  { id: 'scoreMid',  icon: '🏅', name: '만점 돌파',     desc: '150,000점 달성',             check: (r) => r.score >= 150000 },
+  { id: 'scoreHigh', icon: '👑', name: '전설의 주행',   desc: '500,000점 달성',             check: (r) => r.score >= 500000 },
   { id: 'far3km',    icon: '📏', name: '장거리 주자',   desc: '한 판에 3,000m 주행',        check: (r) => r.distance >= 30000 }
 ];
 
@@ -385,11 +413,21 @@ let isBgmPlaying = false;
 let isSuspendedByVisibility = false; // visibilitychange로 인한 일시중지 여부
 
 // 귀여운 장난감 자동차에 어울리는 통통 튀는 레트로 8비트 베이스라인 멜로디 (도-미-솔-라 리듬)
+//
+// 16음 * 220ms = 3.5초라 한 판(1~3분)에 같은 소절을 30~50번 듣게 됐다.
+// 뒤에 높은 음역의 B 소절을 붙여 32음 = 약 7초로 늘렸다. A는 밝게 올라가고
+// B는 한 옥타브 위에서 놀다 다시 A로 떨어져, 돌아오는 지점이 귀에 걸린다.
 const BGM_MELODY = [
+  // A 소절
   261.63, 329.63, 392.00, 440.00, // C4 - E4 - G4 - A4
   349.23, 440.00, 523.25, 587.33, // F4 - A4 - C5 - D5
   392.00, 493.88, 587.33, 659.25, // G4 - B4 - D5 - E5
-  261.63, 329.63, 392.00, 523.25  // C4 - E4 - G4 - C5
+  261.63, 329.63, 392.00, 523.25, // C4 - E4 - G4 - C5
+  // B 소절 (한 옥타브 위에서 Am - F - G - C로 받아 넘긴다)
+  440.00, 523.25, 659.25, 783.99, // A4 - C5 - E5 - G5
+  349.23, 440.00, 523.25, 659.25, // F4 - A4 - C5 - E5
+  392.00, 493.88, 587.33, 493.88, // G4 - B4 - D5 - B4
+  523.25, 440.00, 392.00, 329.63  // C5 - A4 - G4 - E4
 ];
 
 function initAudio() {
@@ -677,6 +715,15 @@ window.addEventListener('keyup', (e) => {
   keys[e.key] = false;
 });
 
+// 창이 포커스를 잃으면 keyup이 오지 않는다. 왼쪽을 누른 채 Alt+Tab 하면 keys에 눌린
+// 상태가 그대로 남아, 돌아왔을 때 손을 떼고 있는데도 차가 벽에 붙어 버린다.
+// 눌림 상태를 통째로 비워 둔다 (일시정지가 하는 처리와 같다).
+function releaseAllInput() {
+  keys = {};
+  touchLeftPressed = touchRightPressed = false;
+}
+window.addEventListener('blur', releaseAllInput);
+
 // 3. 모바일 터치 이벤트 핸들링 (touchstart와 mousedown의 스마트폰 중복 트리거 방지)
 // 스마트폰에서는 touch와 mouse가 연속 트리거되어 순간 가속도가 2배가 되는 현상이 있었습니다.
 // e.stopPropagation() 및 mousedown에서의 터치 디바이스 판별 처리를 추가하여 이를 완벽히 방어합니다.
@@ -744,10 +791,7 @@ function togglePause() {
   paused = !paused;
 
   // 멈춘 사이 눌려 있던 방향키가 남아 있으면 풀자마자 차가 그쪽으로 쏠린다
-  if (paused) {
-    keys = {};
-    touchLeftPressed = touchRightPressed = false;
-  }
+  if (paused) releaseAllInput();
 }
 
 // 4. 조작 안내 가이드
@@ -773,7 +817,7 @@ function showTouchGuide() {
 // 하트 UI 실시간 갱신
 function updateHeartsUI() {
   heartContainer.innerHTML = '';
-  for (let i = 0; i < MAX_LIVES; i++) {
+  for (let i = 0; i < runMaxLives; i++) {
     const heart = document.createElement('span');
     heart.className = 'heart';
     heart.textContent = i < lives ? '❤️' : '🖤';
@@ -1039,7 +1083,8 @@ function startGame(daily = false) {
   scoreMul = (activeMod && activeMod.scoreMul) || 1;
 
   score = 0;
-  lives = (activeMod && activeMod.lives) || MAX_LIVES;
+  runMaxLives = (activeMod && activeMod.lives) || MAX_LIVES;
+  lives = runMaxLives;
   gameSpeed = (activeMod && activeMod.speed) || BASE_SPEED;
   invincibleTime = 0;
   activeShield = !!carPerk.startShield;
@@ -1053,7 +1098,7 @@ function startGame(daily = false) {
   preGameOverSave = null;
 
   // 이전 판에서 누르고 있던 상태가 남으면 새 판 시작하자마자 차가 그쪽으로 쏠린다
-  touchLeftPressed = touchRightPressed = false;
+  releaseAllInput();
   paused = false;
 
   combo = 0;
@@ -1095,7 +1140,7 @@ function startGame(daily = false) {
     });
   }
 
-  scoreVal.textContent = score;
+  scoreVal.textContent = '0';
   updateHeartsUI();
   updateStatusUI();
 
@@ -1206,11 +1251,11 @@ function triggerGameOver() {
   const newlyUnlocked = evaluateAchievements(roundedScore);
   persistSave();
 
-  finalScore.textContent = roundedScore;
-  bestScore.textContent = dailyRun ? save.daily.best : save.best;
-  runCoinsVal.textContent = earnedCoins;
+  finalScore.textContent = roundedScore.toLocaleString();
+  bestScore.textContent = (dailyRun ? save.daily.best : save.best).toLocaleString();
+  runCoinsVal.textContent = earnedCoins.toLocaleString();
   runComboVal.textContent = 'x' + runStats.maxMult;
-  runDistVal.textContent = toMeters(distance) + 'm';
+  runDistVal.textContent = toMeters(distance).toLocaleString() + 'm';
 
   recordBanner.classList.toggle('visible', isNewRecord);
 
@@ -1556,16 +1601,38 @@ function spawnDust() {
   createDustObj(rightX);
 }
 
-// 오일 충돌 시 시각방해 효과 설정
-// 드럼통 위치는 안 쓴다 — 화면(도로) 가운데를 넓게 가리는 게 목적이라 어디서 부딪히든
-// 항상 가운데에 크게 뜨는 편이 낫다. radius는 스프라이트 쪽에서 2.8배로 키워 그리므로
-// 15~40이던 예전 값은 도로 폭(240)의 극히 일부만 가려 "효과가 좁다"는 피드백을 받았다.
+// 오일 충돌 시 시각방해 효과 설정.
+//
+// 드럼통 위치는 안 쓴다 — 카메라 렌즈에 기름이 튄 연출이라 어디서 부딪히든 화면에 묻는다.
+//
+// 예전에는 반지름 150px짜리 반투명 덩어리 하나가 3초 동안 화면 한가운데를 덮었다.
+// 반투명이라 밑의 코인·장애물이 흐릿하게 다 비쳐 "가리지도 보이지도 않는" 상태였고,
+// 흘러내리면서 플레이어 차까지 덮어 내 위치를 못 보게 만들었다. 회피 게임에서 자기 차가
+// 안 보이는 건 방해가 아니라 조작 불능이다.
+//
+// 지금 방식: 작고 불투명한 방울 여러 개를 화면 위쪽에 흩뿌린다.
+// - 방울 하나하나는 확실히 가리되, 사이사이로 도로가 그대로 보인다
+// - y 상한(OIL_MAX_Y)을 두어 방울이 플레이어 차(y=520 고정) 근처까지 내려오지 않는다.
+//   가장 아래 방울이 380+35=415라 차 위쪽(490)까지 70px 넘게 뜬다. 별도 클리핑이 필요 없다.
+//   OIL_MAX_Y를 올릴 거면 이 여유부터 다시 계산할 것.
+const OIL_LIFE = 110;      // 약 1.8초. 3초는 고속 구간에서 패턴 하나를 통째로 못 보고 지난다
+const OIL_MAX_Y = 380;     // 방울이 생길 수 있는 가장 아래
+const OIL_BLOB_MAX_R = 35;
+
 function triggerScreenOil() {
-  screenOils.push({
-    radius: Math.random() * 15 + 50,
-    alpha: 0.9,
-    life: 180 // 약 3초 유지
-  });
+  const blobs = [];
+  const count = 5 + Math.floor(Math.random() * 4); // 5~8개
+  for (let i = 0; i < count; i++) {
+    blobs.push({
+      x: 20 + Math.random() * (GAME_WIDTH - 40),
+      y: 40 + Math.random() * (OIL_MAX_Y - 40),
+      r: 15 + Math.random() * (OIL_BLOB_MAX_R - 15),
+      // 방울마다 걷히는 시점을 달리해 한꺼번에 사라지지 않고 하나씩 닦여 나가게 한다
+      fade: 40 + Math.random() * 40,
+      seed: Math.random() * Math.PI * 2
+    });
+  }
+  screenOils.push({ life: OIL_LIFE, blobs: blobs });
 }
 
 // 통통 뜨는 점수/텍스트 팝업 추가
@@ -1659,8 +1726,11 @@ function pushObs(type, t, dy = 0, opts = {}) {
   if (Math.abs(x - (roadX + roadWidth / 2)) < 24) centerIdleTimer = 0;
 }
 
-// 게이트는 도로 절반을 가로막는 넓적한 문이라 다른 아이템과 크기가 다르다
-const GATE_W = 112;
+// 게이트는 도로 절반을 가로막는 넓적한 문이라 다른 아이템과 크기가 다르다.
+// 112일 때는 두 문 사이에 16px이 비어, 정중앙으로 지나가면 어느 쪽도 판정에 안 걸렸다
+// (판정은 중심에서 62.9px 이내인데 정중앙은 양쪽 문 중심에서 64px). 선택을 건너뛸 수 있던 셈.
+// 도로 폭(240)의 정확히 절반으로 맞춰 두 문이 빈틈없이 맞닿게 한다.
+const GATE_W = 120;
 const GATE_H = 30;
 
 function pushItem(type, t, dy = 0, risky = false) {
@@ -1943,7 +2013,7 @@ function update(dt = 1.0) {
   const distanceRate = DISTANCE_SCORE * (1 + (level - 1) * LEVEL_SCORE_BONUS) * getComboMult() * scoreMul;
   score += distanceRate * (boosterTime > 0 ? 3 : 1) * dt;
   distance += targetSpeed * dt;
-  scoreVal.textContent = Math.floor(score);
+  scoreVal.textContent = Math.floor(score).toLocaleString();
   checkLevelUp();
 
   // 자기 최고 기록을 넘어서는 순간을 놓치지 않고 알려준다
@@ -2041,7 +2111,9 @@ function update(dt = 1.0) {
   // 5. 도로 및 고속 스피드라인 업데이트
   roadOffset = (roadOffset + targetSpeed * dt) % 40;
 
-  if (targetSpeed > 7.0 && Math.random() < 0.2) {
+  // 스폰 확률에 dt를 곱하지 않으면 프레임이 많은 화면일수록 파티클이 많아진다.
+  // 144Hz에서는 60Hz의 2.4배가 쏟아져 같은 게임이 다른 밀도로 보였다.
+  if (targetSpeed > 7.0 && Math.random() < 0.2 * dt) {
     // 속도감이 전면적으로 시원해짐
     speedLines.push({
       x: Math.random() * GAME_WIDTH,
@@ -2057,8 +2129,8 @@ function update(dt = 1.0) {
     }
   }
 
-  // 배기가스 먼지 스폰 주기적 생성
-  if (Math.random() < 0.4) {
+  // 배기가스 먼지 스폰 주기적 생성 (위 스피드라인과 같은 이유로 dt를 곱한다)
+  if (Math.random() < 0.4 * dt) {
     spawnDust();
   }
   for (let i = dustParticles.length - 1; i >= 0; i--) {
@@ -2170,7 +2242,7 @@ function update(dt = 1.0) {
         }
       } else if (it.type === 'heart') {
         // 라이프가 가득 찼다면 회복 대신 점수로 환산해 준다
-        if (lives < MAX_LIVES) {
+        if (lives < runMaxLives) {
           lives++;
           updateHeartsUI();
           playSound('heal');
@@ -2312,10 +2384,8 @@ function update(dt = 1.0) {
   // 11. 화면 방해 오일 효과 감쇠
   for (let i = screenOils.length - 1; i >= 0; i--) {
     const oil = screenOils[i];
+    // 투명해지는 처리는 방울마다 시점이 달라서 그리는 쪽에서 각자 계산한다
     oil.life = Math.max(0, oil.life - dt);
-    if (oil.life < 40) {
-      oil.alpha = oil.life / 40; // 서서히 증발/투명 효과
-    }
     if (oil.life <= 0) {
       screenOils.splice(i, 1);
     }
@@ -2550,24 +2620,11 @@ function draw() {
   }
 
   // 16. 오일 스크린 번짐 연출 그리기 (가장 위에 덧칠)
-  // 그래픽 쪽(sprites.js)에 도로 전체를 가리는 큰 스플래터 함수가 있으면 그걸 쓰고,
-  // 없으면(예: main 브랜치) 같은 자리에 뜨는 기본형으로 대체한다.
-  screenOils.forEach(oil => {
-    if (typeof drawScreenOilSplatter === 'function') {
-      drawScreenOilSplatter(ctx, oil);
-      return;
-    }
-    ctx.save();
-    ctx.globalAlpha = oil.alpha;
-    ctx.fillStyle = 'rgba(47, 54, 64, 0.95)'; // 새까만 장난감 오일 색
-    const cx = GAME_WIDTH / 2, cy = GAME_HEIGHT * 0.42;
-    ctx.beginPath();
-    ctx.arc(cx, cy, oil.radius, 0, Math.PI * 2);
-    ctx.arc(cx - oil.radius * 0.4, cy + oil.radius * 0.3, oil.radius * 0.6, 0, Math.PI * 2);
-    ctx.arc(cx + oil.radius * 0.5, cy - oil.radius * 0.2, oil.radius * 0.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  });
+  // 예전에는 sprites.js에 스플래터 함수가 없을 때를 대비한 기본형이 여기 같이 있었다.
+  // 두 브랜치가 갈려 있던 시절의 안전장치인데, 지금은 같은 저장소에서 두 파일을 함께
+  // 고치고 있고 index.html이 sprites.js를 먼저 불러오므로 없을 수가 없다.
+  // 한 효과를 두 벌로 관리할 이유가 없어 걷어냈다.
+  screenOils.forEach(oil => drawScreenOilSplatter(ctx, oil));
 
   ctx.restore();
 

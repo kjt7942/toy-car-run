@@ -1359,71 +1359,42 @@ function drawGate(ctx, x, y, w, h, bonus) {
   ctx.restore();
 }
 
-// 15) 드럼통 충돌 시 화면 중앙 및 도로 전체 공간에 넓게 팍~ 튀었다가 흘러내리는 대형 3D 오일 효과
+// 15) 드럼통 충돌 시 카메라 렌즈에 튄 기름
+//
+// 예전에는 반지름 150px짜리 반투명 덩어리 하나가 화면 한가운데를 3초 동안 덮고
+// 아래로 흘러내렸다. 세 가지가 문제였다.
+//   - 반투명(0.88)이라 밑의 코인·장애물이 흐릿하게 다 비쳤다. 가리지도 보이지도 않는 상태.
+//   - 흘러내리면서 플레이어 차까지 덮었다. 회피 게임에서 자기 차가 안 보이면 조작 불능이다.
+//   - 큰 원 7개를 합친 실루엣이라 "튀었다"가 아니라 뭉툭한 먹구름으로 읽혔다.
+//
+// 지금은 작고 불투명한 방울을 화면 위쪽에 흩뿌린다. 방울 하나하나는 확실히 가리지만
+// 사이사이로 도로가 그대로 보이고, 방울마다 걷히는 시점이 달라 하나씩 닦여 나간다.
+// 방울 배치와 수명은 game.js의 triggerScreenOil이 부딪히는 순간 한 번만 정한다.
 function drawScreenOilSplatter(ctx, oil) {
   ctx.save();
 
-  // 드럼통 위치에 무관하게 화면 중앙 공간을 중심으로 넓게 연출
-  const centerX = 180; // 화면 중앙 X
-  const centerY = 240; // 화면 중앙 Y 부근
-  const elapsed = 180 - (oil.life || 180);
-  const dripY = centerY + elapsed * 0.7; // 아래로 스르륵 흘러내리는 위치
-  const r = oil.radius * 2.8; // 도로 전체 공간을 가리는 넓은 대형 스케일
+  for (const b of oil.blobs) {
+    // 남은 수명이 이 방울의 fade보다 짧아지면 그때부터 옅어진다
+    const alpha = Math.min(1, oil.life / b.fade);
+    if (alpha <= 0) continue;
+    ctx.globalAlpha = alpha;
 
-  ctx.globalAlpha = (oil.alpha || 1.0) * 0.88; // 묵직하고 시원시원한 반투명 톤
-
-  // 1. 넓은 대형 오일 메탈릭 차콜 그라데이션
-  const oilGrad = ctx.createRadialGradient(centerX - r * 0.2, dripY - r * 0.2, r * 0.1, centerX, dripY, r * 1.6);
-  oilGrad.addColorStop(0, 'rgba(40, 48, 56, 0.95)');
-  oilGrad.addColorStop(0.5, 'rgba(25, 32, 38, 0.92)');
-  oilGrad.addColorStop(0.85, 'rgba(15, 20, 25, 0.88)');
-  oilGrad.addColorStop(1, 'rgba(10, 14, 18, 0.8)');
-
-  ctx.fillStyle = oilGrad;
-  ctx.strokeStyle = '#0F1419';
-  ctx.lineWidth = 2.5;
-
-  // 2. 화면 중앙을 시원하게 덮는 메인 대형 기름얼룩 덩어리들 (Broad Oil Splatter)
-  ctx.beginPath();
-  ctx.arc(centerX, dripY, r, 0, Math.PI * 2);
-  ctx.arc(centerX - r * 0.55, dripY + r * 0.2, r * 0.65, 0, Math.PI * 2);
-  ctx.arc(centerX + r * 0.6, dripY - r * 0.25, r * 0.58, 0, Math.PI * 2);
-  ctx.arc(centerX + r * 0.25, dripY + r * 0.6, r * 0.52, 0, Math.PI * 2);
-  ctx.arc(centerX - r * 0.35, dripY - r * 0.5, r * 0.48, 0, Math.PI * 2);
-  ctx.arc(centerX + r * 0.8, dripY + r * 0.1, r * 0.38, 0, Math.PI * 2);
-  ctx.arc(centerX - r * 0.75, dripY - r * 0.1, r * 0.42, 0, Math.PI * 2);
-  ctx.fill();
-
-  // 3. 도로 전체 공간으로 길게 스르륵 흘러내리는 대형 오일 물줄기 5가닥 (Big Oil Dripping Drops)
-  const dripOffsets = [
-    { dx: -r * 0.65, len: elapsed * 0.8 + r * 1.1, w: r * 0.3 },
-    { dx: -r * 0.3,  len: elapsed * 1.1 + r * 1.5, w: r * 0.38 },
-    { dx: 0,         len: elapsed * 1.35 + r * 1.8, w: r * 0.42 },
-    { dx: r * 0.35,  len: elapsed * 1.05 + r * 1.4, w: r * 0.35 },
-    { dx: r * 0.7,   len: elapsed * 0.75 + r * 1.0, w: r * 0.28 }
-  ];
-
-  dripOffsets.forEach(d => {
+    // 정원 하나면 얼룩이 아니라 점이다. 작은 위성 둘을 비스듬히 붙여 튄 모양을 만든다.
+    ctx.fillStyle = '#1B2026';
     ctx.beginPath();
-    ctx.moveTo(centerX + d.dx - d.w / 2, dripY + r * 0.3);
-    ctx.lineTo(centerX + d.dx - d.w / 3, dripY + d.len);
-    ctx.arc(centerX + d.dx, dripY + d.len + d.w / 2, d.w / 2, 0, Math.PI);
-    ctx.lineTo(centerX + d.dx + d.w / 2, dripY + r * 0.3);
-    ctx.closePath();
+    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+    ctx.arc(b.x + Math.cos(b.seed) * b.r * 0.9, b.y + Math.sin(b.seed) * b.r * 0.9,
+            b.r * 0.45, 0, Math.PI * 2);
+    ctx.arc(b.x - Math.sin(b.seed) * b.r, b.y + Math.cos(b.seed) * b.r,
+            b.r * 0.3, 0, Math.PI * 2);
     ctx.fill();
-  });
 
-  // 4. 넓은 오일 표면의 부드러운 하이라이트 윤기 (Reflective Oil Gloss)
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-  ctx.beginPath();
-  ctx.ellipse(centerX - r * 0.35, dripY - r * 0.35, r * 0.4, r * 0.22, -0.4, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
-  ctx.beginPath();
-  ctx.arc(centerX + r * 0.35, dripY + r * 0.35, r * 0.18, 0, Math.PI * 2);
-  ctx.arc(centerX - r * 0.5, dripY + r * 0.15, r * 0.12, 0, Math.PI * 2);
-  ctx.fill();
+    // 기름 특유의 윤기. 광원이 왼쪽 위에 있다고 보고 방울마다 같은 자리에 얹는다.
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+    ctx.beginPath();
+    ctx.ellipse(b.x - b.r * 0.3, b.y - b.r * 0.35, b.r * 0.32, b.r * 0.18, -0.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
   ctx.restore();
 }
