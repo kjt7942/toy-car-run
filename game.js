@@ -2706,11 +2706,6 @@ function update(dt = 1.0) {
       floatingTexts.splice(i, 1);
     }
   }
-
-  // 13. 화면 흔들림(Screen Shake) 감쇠
-  if (shakeTime > 0) {
-    shakeTime = Math.max(0, shakeTime - dt);
-  }
 }
 
 function draw() {
@@ -3059,6 +3054,9 @@ function loop(timestamp) {
     update(dt);
   }
   if (gameState === 'START') updateAttract(dt);
+  // 흔들림 감쇠는 update 밖에서: 게임오버 순간 걸린 흔들림이 update가 멈춘
+  // 시작 화면·일시정지에서 영원히 남아 화면이 떨렸다
+  if (shakeTime > 0) shakeTime = Math.max(0, shakeTime - dt);
   draw();
   drawHero(dt);
   drawCountdownOverlay();
