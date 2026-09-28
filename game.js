@@ -93,6 +93,8 @@ function defaultSave() {
     unlocked: ['classic'],
     selected: 'classic',
     muted: false,
+    noVibe: false,
+    bestDist: 0,         // 평상시 판 최고 주행거리(px). 결승선 표시에 쓴다
     daily: { date: '', best: 0 }   // 오늘의 도전 기록 (날짜가 바뀌면 초기화)
   };
 }
@@ -391,6 +393,57 @@ let roadOffset = 0;
 // 도로 사이드 오브젝트 (나무, 꽃 등 데코레이션)
 let sceneryObjects = [];
 
+// --- [월드 구간] ---
+// 레벨이 오를 때마다 풍경(BIOMES, sprites.js)이 바뀐다. 규칙은 그대로, 눈이 새로워진다.
+let biomeFrom = null;
+let biomeTo = null;
+let biomeT = 1;                 // 0→1 로 이전 구간 색에서 새 구간 색으로 번진다
+const BIOME_BLEND = 150;        // 약 2.5초
+let weatherParts = [];
+let weatherTimer = 0;
+
+// 이전 최고 거리 지점에 체크무늬 결승선을 깔아 "여기까지만 넘으면 신기록"을 눈으로 보여준다
+let bestLine = null;            // { y, passed } | null
+let bestLineArmed = false;
+
+// 출발 카운트다운 (ms). 이 동안은 update가 돌지 않는다.
+const COUNTDOWN_MS = 1800;
+let countdownMs = 0;
+
+function pickSceneryType() {
+  const list = (biomeTo || BIOMES[0]).scenery;
+  return list[Math.floor(Math.random() * list.length)];
+}
+function randomSceneryX() {
+  return Math.random() < 0.5
+    ? Math.random() * (roadX - 35) + 15
+    : Math.random() * (GAME_WIDTH - roadX - roadWidth - 35) + roadX + roadWidth + 20;
+}
+
+// 진동 피드백 (지원 기기 + 설정이 켜져 있을 때만)
+function buzz(pattern) {
+  if (save.noVibe) return;
+  try {
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') navigator.vibrate(pattern);
+  } catch (e) { /* 일부 브라우저는 사용자 제스처 없이 막는다 */ }
+}
+
+// 구간 이름 배너 (DOM). 레벨업과 판 시작 때 잠깐 떴다 사라진다.
+const zoneBanner = document.getElementById('zoneBanner');
+let zoneBannerTimer = null;
+function showZoneBanner(title, sub) {
+  if (!zoneBanner || typeof zoneBanner.querySelector !== 'function') return;
+  const t = zoneBanner.querySelector('.zone-title');
+  const d = zoneBanner.querySelector('.zone-sub');
+  if (t) t.textContent = title;
+  if (d) d.textContent = sub || '';
+  zoneBanner.classList.remove('show');
+  void zoneBanner.offsetWidth; // 애니메이션 재시작
+  zoneBanner.classList.add('show');
+  clearTimeout(zoneBannerTimer);
+  zoneBannerTimer = setTimeout(() => zoneBanner.classList.remove('show'), 2400);
+}
+
 // 장애물 및 아이템 목록
 let obstacles = [];
 let gameItems = [];
@@ -412,23 +465,6 @@ let bgmSequenceIndex = 0;
 let isBgmPlaying = false;
 let isSuspendedByVisibility = false; // visibilitychange로 인한 일시중지 여부
 
-// 귀여운 장난감 자동차에 어울리는 통통 튀는 레트로 8비트 베이스라인 멜로디 (도-미-솔-라 리듬)
-//
-// 16음 * 220ms = 3.5초라 한 판(1~3분)에 같은 소절을 30~50번 듣게 됐다.
-// 뒤에 높은 음역의 B 소절을 붙여 32음 = 약 7초로 늘렸다. A는 밝게 올라가고
-// B는 한 옥타브 위에서 놀다 다시 A로 떨어져, 돌아오는 지점이 귀에 걸린다.
-const BGM_MELODY = [
-  // A 소절
-  261.63, 329.63, 392.00, 440.00, // C4 - E4 - G4 - A4
-  349.23, 440.00, 523.25, 587.33, // F4 - A4 - C5 - D5
-  392.00, 493.88, 587.33, 659.25, // G4 - B4 - D5 - E5
-  261.63, 329.63, 392.00, 523.25, // C4 - E4 - G4 - C5
-  // B 소절 (한 옥타브 위에서 Am - F - G - C로 받아 넘긴다)
-  440.00, 523.25, 659.25, 783.99, // A4 - C5 - E5 - G5
-  349.23, 440.00, 523.25, 659.25, // F4 - A4 - C5 - E5
-  392.00, 493.88, 587.33, 493.88, // G4 - B4 - D5 - B4
-  523.25, 440.00, 392.00, 329.63  // C5 - A4 - G4 - E4
-];
 
 function initAudio() {
   if (!audioCtx) {
@@ -486,192 +522,322 @@ function unlockAudioContext() {
 window.addEventListener('click', unlockAudioContext);
 window.addEventListener('touchend', unlockAudioContext);
 
-// 부드러운 8비트 BGM 한 음 연주 함수
-function playBgmNote() {
-  if (save.muted) return;
-  if (!audioCtx || gameState !== 'PLAYING' || isBgmPlaying === false || isSuspendedByVisibility) return;
-  try {
-    if (audioCtx.state === 'suspended') {
-      audioCtx.resume();
-    }
-    
-    const osc = audioCtx.createOscillator();
-    const gainNode = audioCtx.createGain();
-    
-    osc.connect(gainNode);
-    gainNode.connect(audioCtx.destination);
-    
-    // 장난감 신디사이저 느낌의 부드러운 삼각파 사용
-    osc.type = 'triangle';
-    const noteFreq = BGM_MELODY[bgmSequenceIndex];
-    
-    // 고속 질주 피버(부스터) 중일 때는 음악 템포와 피치 1.3배 상승!
-    const speedMultiplier = boosterTime > 0 ? 1.3 : 1.0;
-    osc.frequency.setValueAtTime(noteFreq * speedMultiplier, audioCtx.currentTime);
-    
-    gainNode.gain.setValueAtTime(0.04, audioCtx.currentTime); // 배경음이므로 아주 부드럽고 잔잔하게 4% 볼륨
-    gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.28);
-    
-    osc.start();
-    osc.stop(audioCtx.currentTime + 0.3);
-    
-    // 다음 음으로 순환
-    bgmSequenceIndex = (bgmSequenceIndex + 1) % BGM_MELODY.length;
-  } catch (err) {
-    console.log("BGM 연주 예외:", err);
+// ===========================================================================
+//  사운드 — 태엽 장난감 상자 오케스트라 (Web Audio로 전부 합성, 외부 파일 0개)
+// ===========================================================================
+//  BGM: 8마디 루프(16분음표 128스텝). 베이스·코드 스탭·멜로디·오르골·드럼 5트랙.
+//       구간(월드)이 바뀌면 조를 옮기고, 레벨이 오르면 템포가 조금씩 빨라진다.
+//       추격 중엔 하이햇이 촘촘해지고, 밤 구간은 소리가 한결 부드러워진다.
+//  스케줄링은 오디오 시계 기준 선행 예약(lookahead)이라 프레임이 흔들려도 박자가 정확하다.
+
+// 코드 진행 (마디마다 근음 MIDI, 단조 여부)
+const BGM_CHORDS = [
+  [48, false], [45, true], [41, false], [43, false],
+  [48, false], [45, true], [50, true], [43, false]
+];
+// 멜로디 (16분음표, 0 = 쉼표)
+const BGM_MELODY = [
+  72,0,76,0, 79,0,76,0, 77,0,76,0, 74,0,72,0,
+  69,0,72,0, 76,0,72,0, 74,0,72,0, 71,0,69,0,
+  65,0,69,0, 72,0,77,0, 76,0,0,74, 72,0,0,0,
+  71,0,74,0, 79,0,77,76, 74,0,0,0, 79,0,0,0,
+  84,0,0,79, 0,0,76,0, 79,0,81,0, 79,0,76,0,
+  81,0,0,76, 0,0,72,0, 76,0,77,0, 76,0,72,0,
+  74,0,77,0, 81,0,77,0, 79,0,77,0, 76,0,74,0,
+  79,0,74,0, 71,0,74,0, 67,0,71,0, 74,0,79,0
+];
+// 구간별 조 옮김 (반음). 봄 C, 포도밭 D, 단풍 A♭, 바닷가 F, 밤 B♭, 설원 E
+const BIOME_TRANSPOSE = { spring: 0, vineyard: 2, autumn: -4, beach: 5, night: -2, snow: 4 };
+
+let masterGain = null, bgmBus = null, sfxBus = null, noiseBuf = null, bgmFilter = null;
+let bgmNextTime = 0;
+
+function midiHz(m) { return 440 * Math.pow(2, (m - 69) / 12); }
+
+function setupAudioGraph() {
+  if (!audioCtx || masterGain) return;
+  const comp = audioCtx.createDynamicsCompressor();
+  comp.threshold.value = -14;
+  comp.ratio.value = 4;
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = 0.9;
+  masterGain.connect(comp);
+  comp.connect(audioCtx.destination);
+  bgmFilter = audioCtx.createBiquadFilter();
+  bgmFilter.type = 'lowpass';
+  bgmFilter.frequency.value = 9000;
+  bgmBus = audioCtx.createGain();
+  bgmBus.gain.value = 0.5;
+  bgmBus.connect(bgmFilter);
+  bgmFilter.connect(masterGain);
+  sfxBus = audioCtx.createGain();
+  sfxBus.gain.value = 0.85;
+  sfxBus.connect(masterGain);
+  // 1초짜리 화이트 노이즈 한 장을 만들어 모든 타악기·효과에 돌려쓴다
+  noiseBuf = audioCtx.createBuffer(1, audioCtx.sampleRate, audioCtx.sampleRate);
+  const d = noiseBuf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+}
+
+// 음 하나. f1을 주면 f0→f1로 미끄러진다.
+function tone(bus, t, f0, dur, opt = {}) {
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = opt.type || 'sine';
+  o.frequency.setValueAtTime(f0, t);
+  if (opt.f1) o.frequency.exponentialRampToValueAtTime(opt.f1, t + (opt.slide || dur));
+  if (opt.vib) {
+    const l = audioCtx.createOscillator(), lg = audioCtx.createGain();
+    l.frequency.value = opt.vib;
+    lg.gain.value = opt.vibDepth || f0 * 0.03;
+    l.connect(lg); lg.connect(o.frequency);
+    l.start(t); l.stop(t + dur + 0.05);
   }
+  const v = opt.vol || 0.1;
+  const a = opt.attack || 0.004;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(v, t + a);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g);
+  if (opt.lp) {
+    const f = audioCtx.createBiquadFilter();
+    f.type = 'lowpass'; f.frequency.value = opt.lp;
+    g.connect(f); f.connect(bus);
+  } else {
+    g.connect(bus);
+  }
+  o.start(t);
+  o.stop(t + dur + 0.02);
+}
+
+// 노이즈 한 방. 필터 종류/주파수로 하이햇·스네어·쉭 소리를 만든다.
+function noise(bus, t, dur, opt = {}) {
+  const s = audioCtx.createBufferSource();
+  s.buffer = noiseBuf;
+  const f = audioCtx.createBiquadFilter();
+  f.type = opt.filter || 'highpass';
+  f.frequency.setValueAtTime(opt.freq || 6000, t);
+  if (opt.freq1) f.frequency.exponentialRampToValueAtTime(opt.freq1, t + dur);
+  f.Q.value = opt.q || 0.8;
+  const g = audioCtx.createGain();
+  const v = opt.vol || 0.08;
+  g.gain.setValueAtTime(v, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  s.connect(f); f.connect(g); g.connect(bus);
+  s.start(t, Math.random() * 0.5);
+  s.stop(t + dur + 0.02);
+}
+
+function bgmTempoBpm() {
+  const base = 124 + Math.min(level - 1, 8) * 2;
+  return boosterTime > 0 ? base * 1.18 : base;
+}
+
+// update()가 매 프레임 부른다. 앞으로 0.12초 안에 울릴 스텝을 미리 예약한다.
+function bgmTick() {
+  if (!audioCtx || !isBgmPlaying || isSuspendedByVisibility || save.muted) return;
+  if (typeof audioCtx.currentTime !== 'number') return; // 테스트용 가짜 오디오
+  setupAudioGraph();
+  const now = audioCtx.currentTime;
+  if (bgmNextTime < now - 0.05) bgmNextTime = now + 0.03; // 멈췄다 돌아온 경우 따라잡지 않는다
+  // 밤 구간은 먹먹하게, 나머지는 맑게
+  const night = biomeTo && biomeTo.id === 'night';
+  bgmFilter.frequency.setTargetAtTime(night ? 2400 : 9000, now, 0.6);
+  while (bgmNextTime < now + 0.12) {
+    playBgmNote(bgmSequenceIndex, bgmNextTime);
+    bgmNextTime += 60 / bgmTempoBpm() / 4;
+    bgmSequenceIndex = (bgmSequenceIndex + 1) % BGM_MELODY.length;
+  }
+}
+
+// 16분음표 한 스텝을 연주한다
+function playBgmNote(step, t) {
+  if (!audioCtx || save.muted) return;
+  if (typeof step !== 'number') return;
+  const tr = BIOME_TRANSPOSE[(biomeTo && biomeTo.id) || 'spring'] || 0;
+  const bar = Math.floor(step / 16), s16 = step % 16;
+  const [root, minor] = BGM_CHORDS[bar];
+  const sd = 60 / bgmTempoBpm() / 4; // 스텝 길이(초)
+  const B = bgmBus;
+
+  // 베이스: 통통 튀는 근음-옥타브
+  if (s16 % 4 === 0) tone(B, t, midiHz(root - 12 + tr), sd * 1.8, { type: 'triangle', vol: 0.22 });
+  if (s16 === 6 || s16 === 14) tone(B, t, midiHz(root - 12 + 7 + tr), sd * 1.4, { type: 'triangle', vol: 0.16 });
+  if (s16 === 10) tone(B, t, midiHz(root + tr), sd * 1.2, { type: 'triangle', vol: 0.12 });
+
+  // 코드 스탭 (뒷박, 짧고 동글게)
+  if (s16 === 4 || s16 === 12) {
+    const third = minor ? 3 : 4;
+    [0, third, 7].forEach(iv => tone(B, t, midiHz(root + 12 + iv + tr), sd * 1.6,
+      { type: 'square', vol: 0.028, lp: 2200 }));
+  }
+
+  // 멜로디 (장난감 피리: 삼각파 + 옥타브 위 사인 살짝)
+  const m = BGM_MELODY[step];
+  if (m) {
+    const f = midiHz(m + tr);
+    tone(B, t, f, sd * 2.2, { type: 'triangle', vol: 0.1, vib: 5.5, vibDepth: f * 0.006 });
+    tone(B, t, f * 2, sd * 1.2, { type: 'sine', vol: 0.025 });
+  }
+  // 오르골 반짝이 (후반 4마디)
+  if (bar >= 4 && (s16 === 2 || s16 === 10)) {
+    const iv = [0, minor ? 3 : 4, 7][(s16 / 8 + bar) % 3 | 0];
+    tone(B, t, midiHz(root + 36 + iv + tr), 0.35, { type: 'sine', vol: 0.035 });
+  }
+
+  // 드럼
+  if (s16 === 0 || s16 === 8 || (s16 === 10 && bar % 2 === 1)) {
+    tone(B, t, 150, 0.16, { type: 'sine', f1: 42, slide: 0.12, vol: 0.4 });
+  }
+  if (s16 === 4 || s16 === 12) {
+    noise(B, t, 0.12, { filter: 'bandpass', freq: 1900, q: 0.9, vol: 0.13 });
+    tone(B, t, 330, 0.05, { type: 'triangle', vol: 0.06 }); // 나무 딱 소리
+  }
+  const hatEvery = chaser ? 1 : 2;
+  if (s16 % hatEvery === 0) noise(B, t, s16 === 14 ? 0.1 : 0.035, { freq: 8000, vol: s16 % 4 === 2 ? 0.04 : 0.022 });
 }
 
 function startBgm() {
   isBgmPlaying = true;
   bgmSequenceIndex = 0;
-  bgmTimer = 0; // 타이머 초기화
+  bgmTimer = 0;
+  bgmNextTime = 0;
 }
 
 function stopBgm() {
   isBgmPlaying = false;
 }
 
+// 효과음. 이름만 받는다 (호출부는 game.js 곳곳에 있다).
 function playSound(type) {
   if (save.muted) return;
   try {
     initAudio();
     if (!audioCtx) return;
-    
-    if (audioCtx.state === 'suspended') {
-      audioCtx.resume();
-    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    setupAudioGraph();
+    const t = audioCtx.currentTime + 0.005;
+    const S = sfxBus;
 
-    const osc = audioCtx.createOscillator();
-    const gainNode = audioCtx.createGain();
-    
-    osc.connect(gainNode);
-    gainNode.connect(audioCtx.destination);
-    
-    const now = audioCtx.currentTime;
-
-    if (type === 'coin') {
-      // 맑은 높은 톤의 "띠링♪" 소리
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(587.33, now); // D5
-      osc.frequency.setValueAtTime(880.00, now + 0.08); // A5
-      gainNode.gain.setValueAtTime(0.12, now);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
-      osc.start(now);
-      osc.stop(now + 0.25);
-    } 
-    else if (type === 'item') {
-      // 뾰로롱 상승 효과음
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(330, now); 
-      osc.frequency.exponentialRampToValueAtTime(990, now + 0.35);
-      gainNode.gain.setValueAtTime(0.14, now);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
-      osc.start(now);
-      osc.stop(now + 0.38);
-    } 
-    else if (type === 'booster') {
-      // 제트기 슈우우웅 가속 효과음
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(180, now);
-      osc.frequency.exponentialRampToValueAtTime(1300, now + 0.85);
-      gainNode.gain.setValueAtTime(0.15, now);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
-      osc.start(now);
-      osc.stop(now + 0.9);
-    } 
-    else if (type === 'splash') {
-      // 웅덩이를 밟았을 때의 첨벙 소리
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(620, now);
-      osc.frequency.exponentialRampToValueAtTime(180, now + 0.22);
-      gainNode.gain.setValueAtTime(0.12, now);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
-      osc.start(now);
-      osc.stop(now + 0.28);
-    }
-    else if (type === 'heal') {
-      // 하트 회복 시의 따뜻한 상승음
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(523.25, now);
-      osc.frequency.setValueAtTime(659.25, now + 0.12);
-      osc.frequency.setValueAtTime(783.99, now + 0.24);
-      gainNode.gain.setValueAtTime(0.14, now);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
-      osc.start(now);
-      osc.stop(now + 0.4);
-    }
-    else if (type === 'slow') {
-      // 시간이 늘어지는 듯한 하강음
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(880, now);
-      osc.frequency.exponentialRampToValueAtTime(220, now + 0.55);
-      gainNode.gain.setValueAtTime(0.13, now);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
-      osc.start(now);
-      osc.stop(now + 0.6);
-    }
-    else if (type === 'nearmiss') {
-      // 스쳐 지나갈 때의 짧고 산뜻한 "핑!" 신호음
-      osc.type = 'square';
-      osc.frequency.setValueAtTime(1180, now);
-      osc.frequency.exponentialRampToValueAtTime(1720, now + 0.07);
-      gainNode.gain.setValueAtTime(0.05, now);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
-      osc.start(now);
-      osc.stop(now + 0.12);
-    }
-    else if (type === 'levelup') {
-      // 레벨 상승 팡파레 (도-미-솔 상승 아르페지오)
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(523.25, now);        // C5
-      osc.frequency.setValueAtTime(659.25, now + 0.09); // E5
-      osc.frequency.setValueAtTime(783.99, now + 0.18); // G5
-      osc.frequency.setValueAtTime(1046.50, now + 0.27); // C6
-      gainNode.gain.setValueAtTime(0.13, now);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
-      osc.start(now);
-      osc.stop(now + 0.45);
-    }
-    else if (type === 'crash') {
-      // 쾅! 하는 둔탁한 폭발성 소리
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(220, now);
-      osc.frequency.linearRampToValueAtTime(40, now + 0.4);
-      gainNode.gain.setValueAtTime(0.28, now);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
-      osc.start(now);
-      osc.stop(now + 0.45);
-    } 
-    else if (type === 'siren') {
-      // 삐뽀삐뽀 사이렌. 추격 내내 1초마다 다시 울리므로 볼륨은 낮게 잡았다.
-      osc.type = 'square';
-      osc.frequency.setValueAtTime(740, now);
-      osc.frequency.setValueAtTime(988, now + 0.22);
-      osc.frequency.setValueAtTime(740, now + 0.44);
-      osc.frequency.setValueAtTime(988, now + 0.66);
-      gainNode.gain.setValueAtTime(0.07, now);
-      gainNode.gain.setValueAtTime(0.07, now + 0.82);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.92);
-      osc.start(now);
-      osc.stop(now + 0.92);
-    }
-    else if (type === 'gameover') {
-      // 멜랑꼴리한 패배 하강 멜로디
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(440, now);
-      osc.frequency.setValueAtTime(349.23, now + 0.15); // F4
-      osc.frequency.setValueAtTime(293.66, now + 0.3);  // D4
-      osc.frequency.linearRampToValueAtTime(110, now + 0.85);
-      gainNode.gain.setValueAtTime(0.18, now);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
-      osc.start(now);
-      osc.stop(now + 0.9);
+    switch (type) {
+      case 'coin': {
+        // 콤보가 오를수록 음이 한 칸씩 올라간다 → 연속으로 먹는 쾌감
+        const semi = Math.min(getComboMult() - 1, 7) * 2;
+        const f = midiHz(83 + semi);
+        tone(S, t, f, 0.08, { type: 'square', vol: 0.05, lp: 5000 });
+        tone(S, t + 0.06, f * 1.5, 0.22, { type: 'square', vol: 0.05, lp: 5000 });
+        tone(S, t + 0.06, f * 3, 0.18, { type: 'sine', vol: 0.03 });
+        break;
+      }
+      case 'item':
+        [72, 76, 79, 84].forEach((n, i) => {
+          tone(S, t + i * 0.045, midiHz(n), 0.3, { type: 'sine', vol: 0.12 });
+          tone(S, t + i * 0.045, midiHz(n + 12), 0.15, { type: 'triangle', vol: 0.03 });
+        });
+        break;
+      case 'shield':
+        tone(S, t, 300, 0.25, { type: 'sine', f1: 900, slide: 0.18, vol: 0.16 });
+        tone(S, t + 0.12, 1320, 0.3, { type: 'sine', vol: 0.06 });
+        tone(S, t + 0.18, 1760, 0.3, { type: 'sine', vol: 0.05 });
+        break;
+      case 'shieldpop':
+        noise(S, t, 0.08, { freq: 3000, vol: 0.14 });
+        tone(S, t, 1400, 0.12, { type: 'sine', f1: 380, vol: 0.18 });
+        break;
+      case 'magnet':
+        tone(S, t, 180, 0.35, { type: 'sawtooth', f1: 720, vol: 0.06, lp: 1800, vib: 22, vibDepth: 40 });
+        tone(S, t + 0.25, 1568, 0.2, { type: 'sine', vol: 0.07 });
+        break;
+      case 'booster':
+        noise(S, t, 0.7, { filter: 'bandpass', freq: 400, freq1: 5000, q: 1.2, vol: 0.18 });
+        tone(S, t, 140, 0.75, { type: 'sawtooth', f1: 880, slide: 0.6, vol: 0.08, lp: 2500 });
+        [79, 83, 86].forEach((n, i) => tone(S, t + 0.35 + i * 0.07, midiHz(n), 0.25, { type: 'square', vol: 0.04, lp: 4000 }));
+        break;
+      case 'splash': // 바나나 미끄덩: 슬라이드 휘슬 하강
+        tone(S, t, 1500, 0.5, { type: 'sine', f1: 260, slide: 0.45, vol: 0.14, vib: 14, vibDepth: 30 });
+        noise(S, t, 0.12, { filter: 'bandpass', freq: 2500, vol: 0.06 });
+        break;
+      case 'oil': // 기름 철퍽 + 꿀렁
+        tone(S, t, 220, 0.3, { type: 'sine', f1: 55, slide: 0.25, vol: 0.3, vib: 18, vibDepth: 25 });
+        noise(S, t, 0.3, { filter: 'lowpass', freq: 1400, freq1: 200, vol: 0.28 });
+        tone(S, t + 0.12, 140, 0.18, { type: 'sine', f1: 60, vol: 0.14 });
+        break;
+      case 'squeak': // 보행자·강아지: 삑! 하는 고무 장난감 소리 + 쿵
+        tone(S, t, 900, 0.18, { type: 'square', f1: 1600, slide: 0.08, vol: 0.05, lp: 3500 });
+        tone(S, t + 0.1, 1500, 0.12, { type: 'square', f1: 1100, vol: 0.04, lp: 3500 });
+        tone(S, t, 200, 0.2, { type: 'sine', f1: 70, vol: 0.2 });
+        break;
+      case 'heal':
+        [72, 76, 79].forEach((n, i) => tone(S, t + i * 0.08, midiHz(n), 0.5, { type: 'triangle', vol: 0.1 }));
+        tone(S, t + 0.26, midiHz(91), 0.4, { type: 'sine', vol: 0.05 });
+        break;
+      case 'slow':
+        tone(S, t, 880, 0.75, { type: 'triangle', f1: 200, slide: 0.7, vol: 0.13, vib: 6, vibDepth: 25 });
+        tone(S, t, 885, 0.75, { type: 'triangle', f1: 203, slide: 0.7, vol: 0.06 });
+        break;
+      case 'nearmiss':
+        noise(S, t, 0.14, { filter: 'bandpass', freq: 1200, freq1: 6000, q: 1.5, vol: 0.09 });
+        tone(S, t + 0.04, 1760, 0.1, { type: 'sine', vol: 0.05 });
+        break;
+      case 'levelup':
+        [[72, 0], [76, 0.09], [79, 0.18]].forEach(([n, d]) => {
+          tone(S, t + d, midiHz(n), 0.16, { type: 'square', vol: 0.05, lp: 4000 });
+          tone(S, t + d, midiHz(n - 12), 0.16, { type: 'triangle', vol: 0.07 });
+        });
+        [84, 88, 91].forEach(n => tone(S, t + 0.28, midiHz(n), 0.55, { type: 'triangle', vol: 0.07, vib: 6 }));
+        noise(S, t + 0.28, 0.3, { freq: 7000, vol: 0.04 });
+        break;
+      case 'gate':
+        [84, 88, 91, 96, 100].forEach((n, i) => tone(S, t + i * 0.05, midiHz(n), 0.22, { type: 'square', vol: 0.035, lp: 6000 }));
+        break;
+      case 'crash': // 플라스틱 장난감이 쿵! 딱!
+        tone(S, t, 320, 0.28, { type: 'sine', f1: 60, slide: 0.22, vol: 0.4 });
+        noise(S, t, 0.2, { filter: 'lowpass', freq: 2200, freq1: 300, vol: 0.3 });
+        tone(S, t, 1100, 0.04, { type: 'square', vol: 0.08 });
+        tone(S, t + 0.05, 700, 0.05, { type: 'square', vol: 0.05 });
+        break;
+      case 'siren':
+        [0, 0.22, 0.44, 0.66].forEach((d, i) => tone(S, t + d, i % 2 ? 988 : 740, 0.22,
+          { type: 'triangle', vol: 0.06, attack: 0.02, vib: 9, vibDepth: 12 }));
+        break;
+      case 'tick':
+        tone(S, t, 1320, 0.07, { type: 'square', vol: 0.05, lp: 5000 });
+        tone(S, t, 660, 0.09, { type: 'triangle', vol: 0.08 });
+        break;
+      case 'go':
+        [72, 76, 79, 84].forEach(n => tone(S, t, midiHz(n), 0.5, { type: 'square', vol: 0.035, lp: 5000 }));
+        tone(S, t, midiHz(60), 0.5, { type: 'triangle', vol: 0.12 });
+        break;
+      case 'windup': // 태엽 감는 끼릭끼릭
+        for (let i = 0; i < 9; i++) {
+          const d = i * 0.055 - i * i * 0.0012;
+          noise(S, t + d, 0.025, { filter: 'bandpass', freq: 3200 + i * 150, q: 4, vol: 0.18 });
+        }
+        tone(S, t, 300, 0.5, { type: 'triangle', f1: 900, slide: 0.45, vol: 0.05 });
+        break;
+      case 'honk':
+        tone(S, t, 440, 0.16, { type: 'square', vol: 0.06, lp: 1600 });
+        tone(S, t, 554, 0.16, { type: 'square', vol: 0.05, lp: 1600 });
+        tone(S, t + 0.2, 440, 0.22, { type: 'square', vol: 0.06, lp: 1600 });
+        tone(S, t + 0.2, 554, 0.22, { type: 'square', vol: 0.05, lp: 1600 });
+        break;
+      case 'gameover': { // 태엽이 풀려 멈추는 소리: 끼릭… 끼릭……… 끽 + 축 처지는 멜로디
+        let d = 0;
+        for (let i = 0; i < 6; i++) {
+          noise(S, t + d, 0.03, { filter: 'bandpass', freq: 2800 - i * 250, q: 4, vol: 0.15 });
+          d += 0.08 + i * 0.05;
+        }
+        [[67, 0], [64, 0.25], [60, 0.5]].forEach(([n, dd]) =>
+          tone(S, t + dd, midiHz(n), 0.35, { type: 'triangle', vol: 0.12, f1: midiHz(n) * 0.97 }));
+        tone(S, t + 0.8, midiHz(55), 0.9, { type: 'triangle', f1: midiHz(43), slide: 0.8, vol: 0.12, vib: 5 });
+        break;
+      }
     }
   } catch (err) {
-    console.log("사운드 재생 제한:", err);
+    console.log('사운드 재생 제한:', err);
   }
 }
+
 
 // 1. 캔버스 해상도 조절
 function resizeCanvas() {
@@ -708,7 +874,7 @@ window.addEventListener('keydown', (e) => {
       closeScreen(garageScreen);
       return;
     }
-    startGame(dailyRun);
+    beginRun(dailyRun);
   }
 });
 window.addEventListener('keyup', (e) => {
@@ -787,11 +953,32 @@ touchRight.addEventListener('mouseleave', () => touchRightPressed = false);
 let paused = false;
 
 function togglePause() {
-  if (gameState !== 'PLAYING') return;
+  if (gameState !== 'PLAYING' || countdownMs > 0) return;
   paused = !paused;
 
   // 멈춘 사이 눌려 있던 방향키가 남아 있으면 풀자마자 차가 그쪽으로 쏠린다
-  if (paused) releaseAllInput();
+  if (paused) {
+    releaseAllInput();
+    showPausePanel();
+  } else {
+    hidePausePanel();
+  }
+}
+
+// 모바일에는 Space가 없으니 화면 위 일시정지 버튼과 멈춤 패널을 따로 둔다.
+// 패널은 화면 아래쪽에만 얹어, 멈춘 장면(스프라이트)은 그대로 들여다볼 수 있다.
+const pauseBtn = document.getElementById('pauseBtn');
+const pausePanel = document.getElementById('pausePanel');
+function showPausePanel() { if (pausePanel) pausePanel.classList.add('active'); }
+function hidePausePanel() { if (pausePanel) pausePanel.classList.remove('active'); }
+
+// 새 판은 항상 이 함수로 연다: 판을 초기화한 뒤 3·2·1 카운트다운을 건다.
+// (test_chase.js는 startGame을 직접 불러 카운트다운 없이 곧바로 시뮬레이션한다)
+function beginRun(daily) {
+  startGame(daily);
+  playSound('windup');
+  countdownMs = COUNTDOWN_MS;
+  buzz(20);
 }
 
 // 4. 조작 안내 가이드
@@ -869,9 +1056,19 @@ function checkLevelUp() {
   level++;
   nextLevelDistance += LEVEL_DISTANCE * Math.pow(LEVEL_GROWTH, level - 1);
   playSound('levelup');
-  addFloatingText(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 40, `LEVEL ${level} • SPEED UP!`, '#FF5757');
   shakeTime = 14;
   shakeAmount = 5;
+  buzz(40);
+
+  // 새 구간으로 풍경이 번져 넘어간다
+  const next = biomeForLevel(level);
+  if (!biomeTo || next.id !== biomeTo.id) {
+    biomeFrom = biomeTo || next;
+    biomeTo = next;
+    biomeT = 0;
+    weatherParts = [];
+  }
+  showZoneBanner(`LEVEL ${level} · ${next.icon} ${next.name}`, '속도 UP!');
 }
 
 // --- [기록 / 차고 화면 렌더링] ---
@@ -940,20 +1137,28 @@ function renderGarage() {
       (owned ? '' : ' locked') +
       (affordable ? ' affordable' : '');
 
-    // 레인보우는 미리보기에서도 색이 도는 것을 보여준다
-    const swatchColor = skin.body || 'hsl(300, 85%, 62%)';
     const status = owned
       ? (selected ? '<span class="car-status owned">선택됨</span>' : '<span class="car-status owned">보유</span>')
       : `<span class="car-status${affordable ? ' affordable' : ''}">🪙 ${cost.toLocaleString()}` +
         (CAR_SALE && skin.cost > cost ? ` <s>${skin.cost.toLocaleString()}</s>` : '') + '</span>';
 
     card.innerHTML =
-      `<div class="car-swatch" style="background:${swatchColor}; --stripe:${skin.stripe}"></div>` +
+      `<canvas class="car-swatch car-preview" width="112" height="152" aria-hidden="true"></canvas>` +
       `<span class="car-name">${escapeHtml(skin.name)}</span>` +
       `<span class="car-perk">${escapeHtml(skin.perk)}</span>` + status;
 
     card.addEventListener('click', () => selectOrBuyCar(skin));
     carList.appendChild(card);
+
+    // 게임 안과 똑같은 장난감 차 그림으로 미리보기 (2배 해상도로 그려 선명하게)
+    const pv = card.querySelector('canvas');
+    if (pv && typeof pv.getContext === 'function' && typeof drawCarPreview === 'function') {
+      const pctx = pv.getContext('2d');
+      if (pctx) {
+        pctx.setTransform(2, 0, 0, 2, 0, 0);
+        drawCarPreview(pctx, skin, 56, 76);
+      }
+    }
   }
 }
 
@@ -1073,7 +1278,6 @@ function updateStatusUI() {
 function startGame(daily = false) {
   initAudio();
   startBgm(); // 레트로 배경음 실행
-  playSound('item'); // 게임 시작 뾰로롱
   gameState = 'PLAYING';
 
   // 판마다 선택된 차와 오늘의 규칙을 한 번만 확정한다
@@ -1131,14 +1335,23 @@ function startGame(daily = false) {
   sceneryObjects = [];
   
   // 넉넉하게 배경 데코 스폰
+  biomeTo = biomeForLevel(1);
+  biomeFrom = biomeTo;
+  biomeT = 1;
+  weatherParts = [];
+  weatherTimer = 0;
   for (let i = 0; i < 8; i++) {
     sceneryObjects.push({
-      x: Math.random() < 0.5 ? Math.random() * (roadX - 35) + 15 : Math.random() * (GAME_WIDTH - roadX - roadWidth - 35) + roadX + roadWidth + 20,
+      x: randomSceneryX(),
       y: Math.random() * GAME_HEIGHT,
-      type: Math.random() < 0.4 ? 'tree' : (Math.random() < 0.75 ? 'flower' : 'windmill'),
+      type: pickSceneryType(),
       rot: Math.random() * Math.PI
     });
   }
+
+  // 오늘의 도전은 규칙이 달라 거리 비교가 공정하지 않으므로 평상시 판에서만 결승선을 깐다
+  bestLine = null;
+  bestLineArmed = !daily && (save.bestDist || 0) > 600;
 
   scoreVal.textContent = '0';
   updateHeartsUI();
@@ -1149,6 +1362,7 @@ function startGame(daily = false) {
 
   // 터치 영역은 평소 보이지 않으므로, 판이 시작될 때만 좌우 버튼을 띄워 조작법을 알려준다
   showTouchGuide();
+  hidePausePanel();
 
   // 오늘 어떤 규칙으로 달리는지 판 시작에 한 번 알려 준다
   if (activeMod) {
@@ -1198,6 +1412,7 @@ function doRevive() {
   updateHeartsUI();
   updateStatusUI();
   addFloatingText(car.x, car.y - 60, '부활! 💖', '#FF5757');
+  countdownMs = COUNTDOWN_MS;
 }
 
 // 게임 오버
@@ -1205,6 +1420,10 @@ function triggerGameOver() {
   stopBgm(); // 배경음 중단
   playSound('gameover'); // 패배 하강 멜로디
   gameState = 'GAMEOVER';
+  paused = false;
+  countdownMs = 0;
+  hidePausePanel();
+  buzz([60, 50, 220]);
 
   // 게임오버 후에도 콤보/아이템 배지가 화면에 남지 않도록 상태 정리
   combo = 0;
@@ -1241,6 +1460,7 @@ function triggerGameOver() {
     if (isNewRecord) save.daily.best = roundedScore;
   } else {
     if (isNewRecord) save.best = roundedScore;
+    if (distance > (save.bestDist || 0)) save.bestDist = distance;
 
     // TOP 5 순위표 갱신
     save.scores.push(roundedScore);
@@ -1316,7 +1536,7 @@ function handleCollision(obsIndex) {
   // 부스터나 보호막보다 먼저 판정한다 — 어떤 아이템으로도 그냥 치고 지나갈 수는 없어야 한다.
   if (obs.crossing) {
     obstacles.splice(obsIndex, 1);
-    playSound('crash');
+    playSound('squeak');
     createCrashParticles(obs.x, obs.y, '#FFEAA7');
     addFloatingText(obs.x, obs.y - 20, '앗, 놀랐잖아! 💢', '#FF5757');
     resetCombo();
@@ -1335,15 +1555,15 @@ function handleCollision(obsIndex) {
     if (boosterTime > 0) return;
 
     if (obs.type === 'oildrum') {
-      playSound('crash');
-      createCrashParticles(obs.x, obs.y, '#2F3640');
+      playSound('oil');
+      createOilBurst(obs.x, obs.y);
       triggerScreenOil();
       addFloatingText(car.x, car.y - 40, "미끌미끌!", "#718093");
       shakeTime = 8;
       shakeAmount = 4;
     } else {
       playSound('splash');
-      createCrashParticles(obs.x, obs.y, '#FFD32A');
+      createCrashParticles(obs.x, obs.y, '#FFE066');
       slipperyTime = SLIPPERY_DURATION;
       addFloatingText(car.x, car.y - 40, "미끄덩!", "#FFD32A");
       shakeTime = 6;
@@ -1370,7 +1590,8 @@ function handleCollision(obsIndex) {
   if (activeShield) {
     activeShield = false;
     obstacles.splice(obsIndex, 1);
-    playSound('item'); // 가벼운 사운드
+    playSound('shieldpop'); // 비눗방울이 퐁!
+    createCrashParticles(car.x, car.y - 20, '#81ECEC');
     createCrashParticles(obs.x, obs.y, '#81ECEC');
     addFloatingText(car.x, car.y - 40, "SHIELD BLOCK!", "#00CEC9");
     shakeTime = 10;
@@ -1387,6 +1608,7 @@ function handleCollision(obsIndex) {
 // 라이프 1 차감 경로. 장애물 충돌과 추격자에게 잡힌 경우가 모두 여기를 지난다.
 function takeDamage(label = "앗!!") {
   playSound('crash');
+  buzz(lives <= 1 ? [80, 60, 160] : 70);
   lives--;
   runStats.damage++;
   updateHeartsUI();
@@ -1559,21 +1781,48 @@ function updateChase(dt) {
 }
 
 // 충돌 스파크 파티클
+// 색만 받던 예전 호출부는 그대로 두고, 색으로 효과 성격을 가른다:
+//   금색/아이템 색 → 반짝 별 + 충격파 링 (기분 좋은 획득)
+//   그 밖(충돌)   → 동글 파편 + 색종이 + 링 (장난감이 통! 튕기는 느낌)
+const PICKUP_COLORS = ['#FFD700', '#FED330', '#81ECEC', '#A29BFE', '#7ED957', '#FF7675'];
 function createCrashParticles(x, y, color = '#FD9644') {
-  for (let i = 0; i < 18; i++) {
+  const pickup = PICKUP_COLORS.includes(color);
+  const n = pickup ? 12 : 16;
+  for (let i = 0; i < n; i++) {
     const angle = Math.random() * Math.PI * 2;
-    const speed = Math.random() * 5 + 3;
+    const speed = Math.random() * 4.5 + 2.5;
+    const shape = pickup ? (i % 3 === 0 ? 'circle' : 'star') : (i % 2 ? 'confetti' : 'circle');
     particles.push({
       x: x,
       y: y,
       vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed - 2, 
-      size: Math.random() * 6 + 3,
-      color: color === 'random' ? (Math.random() < 0.5 ? '#FFD700' : '#81ECEC') : color,
+      vy: Math.sin(angle) * speed - 2,
+      size: shape === 'star' ? Math.random() * 2.5 + 3.5 : Math.random() * 5 + 3,
+      color: color === 'random' ? (Math.random() < 0.5 ? '#FFD700' : '#81ECEC')
+        : (!pickup && shape === 'confetti' ? CONFETTI[i % CONFETTI.length] : color),
       alpha: 1,
-      decay: Math.random() * 0.035 + 0.02
+      decay: Math.random() * 0.03 + 0.022,
+      shape,
+      rot: Math.random() * Math.PI,
+      vr: (Math.random() - 0.5) * 0.3,
+      g: shape === 'confetti' ? 0.12 : 0.05
     });
   }
+  // 충격파 링
+  particles.push({ x, y, vx: 0, vy: 0, size: 6, grow: pickup ? 2.2 : 3.2, alpha: 0.9, decay: 0.06,
+                   color: pickup ? '#FFFFFF' : color, shape: 'ring' });
+}
+const CONFETTI = ['#FF6B6B', '#FFD43B', '#4DABF7', '#51CF66', '#9775FA'];
+
+// 드럼통을 들이받으면 기름이 사방으로 철퍽 튄다
+function createOilBurst(x, y) {
+  for (let i = 0; i < 14; i++) {
+    const a = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.4;
+    const sp = Math.random() * 5 + 3;
+    particles.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, size: Math.random() * 3 + 2.5,
+                     color: '#1B1F27', alpha: 1, decay: 0.028, shape: 'drop', g: 0.25 });
+  }
+  particles.push({ x, y, vx: 0, vy: 0, size: 8, grow: 3, alpha: 0.8, decay: 0.07, color: '#495057', shape: 'ring' });
 }
 
 // 배기구 흙먼지 파티클 추가
@@ -1966,21 +2215,54 @@ function spawnPattern(targetSpeed) {
   spawnTimer = -(patternDepth / Math.max(1, targetSpeed));
 }
 
+function updateWeather(dt, speed) {
+  const kind = biomeT > 0.5 ? (biomeTo && biomeTo.weather) : (biomeFrom && biomeFrom.weather);
+  if (kind) {
+    const rate = { snow: 5, leaf: 16, petal: 22, firefly: 26 }[kind] || 20;
+    weatherTimer += dt;
+    while (weatherTimer > rate && weatherParts.length < 40) {
+      weatherTimer -= rate;
+      const p = {
+        kind,
+        x: Math.random() * GAME_WIDTH,
+        y: kind === 'firefly' ? Math.random() * GAME_HEIGHT : -10,
+        size: kind === 'snow' ? 1.5 + Math.random() * 2 : 2.5 + Math.random() * 1.8,
+        rot: Math.random() * Math.PI,
+        vr: (Math.random() - 0.5) * 0.08,
+        drift: (Math.random() - 0.5) * 0.8,
+        alpha: kind === 'firefly' ? 0 : 0.85,
+        life: 0,
+        color: Math.random() < 0.5 ? '#E8590C' : '#FAB005'
+      };
+      if (kind === 'firefly') {
+        // 반딧불은 도로 위를 가리지 않도록 잔디 쪽에서만 떠다닌다
+        p.x = Math.random() < 0.5 ? Math.random() * (roadX - 8) : roadX + roadWidth + 8 + Math.random() * (GAME_WIDTH - roadX - roadWidth - 8);
+      }
+      weatherParts.push(p);
+    }
+  }
+  for (let i = weatherParts.length - 1; i >= 0; i--) {
+    const p = weatherParts[i];
+    p.life += dt;
+    if (p.kind === 'firefly') {
+      p.y += speed * 0.6 * dt;
+      p.x += Math.sin(p.life / 20 + p.rot) * 0.4 * dt;
+      p.alpha = Math.min(1, p.life / 30) * (0.5 + Math.sin(p.life / 9 + p.rot) * 0.5);
+    } else {
+      const fall = p.kind === 'snow' ? 1.2 + p.size * 0.4 : 1.3;
+      p.y += (speed * 0.55 + fall) * dt;
+      p.x += (p.drift + Math.sin(p.life / 25 + p.rot) * 0.5) * dt;
+      p.rot += p.vr * dt;
+    }
+    if (p.y > GAME_HEIGHT + 20 || p.x < -20 || p.x > GAME_WIDTH + 20) weatherParts.splice(i, 1);
+  }
+}
+
 function update(dt = 1.0) {
   if (gameState !== 'PLAYING') return;
 
-  // BGM 타이머 업데이트 및 연주 처리
-  if (isBgmPlaying && !isSuspendedByVisibility) {
-    // 기본 템포 비트를 더욱 빠르고 박진감 있게 상향 (기본 320ms -> 220ms로 속도 대폭 상향!)
-    // 부스터 피버 중에는 템포를 1.5배 신속하게 폭발 가속!
-    const tempoInterval = boosterTime > 0 ? (220 / 1.5) : 220;
-    // dt를 시간(ms, 60fps 기준 프레임당 ~16.67ms)으로 환산하여 누적
-    bgmTimer += dt * 16.67;
-    if (bgmTimer >= tempoInterval) {
-      bgmTimer -= tempoInterval;
-      playBgmNote();
-    }
-  }
+  // BGM: 오디오 시계 기준으로 다음 스텝들을 미리 예약한다
+  bgmTick();
 
   // 1. 부스터 모드 여부에 따른 스피드 가중치
   let targetSpeed = BASE_SPEED;
@@ -2148,18 +2430,38 @@ function update(dt = 1.0) {
     obj.y += targetSpeed * dt;
     if (obj.type === 'windmill') {
       obj.rot += 0.04 * dt; // 풍차 회전 각도 누적
+    } else if (obj.type === 'palm') {
+      obj.rot += 0.03 * dt; // 야자수 잎 살랑
     }
   });
   
   sceneryObjects.forEach(obj => {
     if (obj.y > GAME_HEIGHT + 40) {
       obj.y = -40;
-      obj.x = Math.random() < 0.5
-        ? Math.random() * (roadX - 35) + 15
-        : Math.random() * (GAME_WIDTH - roadX - roadWidth - 35) + roadX + roadWidth + 20;
-      obj.type = Math.random() < 0.4 ? 'tree' : (Math.random() < 0.75 ? 'flower' : 'windmill');
+      obj.x = randomSceneryX();
+      obj.type = pickSceneryType(); // 새로 나오는 풍경은 지금 구간의 것
     }
   });
+
+  // 6-b. 구간 색 번짐 + 날씨
+  if (biomeT < 1) biomeT = Math.min(1, biomeT + dt / BIOME_BLEND);
+  updateWeather(dt, targetSpeed);
+
+  // 6-c. 최고 기록 결승선: 선이 화면 위(-20)에서 차 앞까지 내려오는 거리만큼 미리 깐다
+  if (bestLineArmed && !bestLine && distance >= save.bestDist - (car.y + 20)) {
+    bestLine = { y: -20, passed: false };
+    bestLineArmed = false;
+  }
+  if (bestLine) {
+    bestLine.y += targetSpeed * dt;
+    if (!bestLine.passed && bestLine.y >= car.y - car.height / 2) {
+      bestLine.passed = true;
+      playSound('levelup');
+      buzz([30, 40, 30]);
+      addFloatingText(GAME_WIDTH / 2, car.y - 90, '🏁 최고 거리 돌파!', '#FFDE59');
+    }
+    if (bestLine.y > GAME_HEIGHT + 30) bestLine = null;
+  }
 
   // 7. 설계된 패턴 단위로 장애물/아이템을 내보낸다
   spawnTimer += dt;
@@ -2224,7 +2526,7 @@ function update(dt = 1.0) {
         // 게이트는 지나가는 것 자체가 선택이다. 판정만 하고 차에 붙지 않는다.
         if (it.type === 'gateBonus') {
           bonusTime = BONUS_DURATION * (carPerk.itemBonus || 1);
-          playSound('levelup');
+          playSound('gate');
           addFloatingText(car.x, car.y - 45, "코인 2배!! 🪙", "#FFD700");
           shakeTime = 10;
           shakeAmount = 4;
@@ -2260,12 +2562,12 @@ function update(dt = 1.0) {
         createCrashParticles(it.x, it.y, '#A29BFE');
       } else if (it.type === 'shield') {
         activeShield = true;
-        playSound('item');
+        playSound('shield');
         addFloatingText(car.x, car.y - 45, "보호막 장착 🛡️", "#00CEC9");
         createCrashParticles(it.x, it.y, '#81ECEC');
       } else if (it.type === 'magnet') {
         magnetTime = MAGNET_DURATION * (carPerk.itemBonus || 1);
-        playSound('item');
+        playSound('magnet');
         addFloatingText(car.x, car.y - 45, "코인 자석 활성 🧲", "#FF7675");
         createCrashParticles(it.x, it.y, '#FF7675');
       } else if (it.type === 'booster') {
@@ -2373,6 +2675,9 @@ function update(dt = 1.0) {
   // 10. 충돌 스파크 파티클 업데이트
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
+    if (p.g) p.vy += p.g * dt;
+    if (p.vr) p.rot += p.vr * dt;
+    if (p.grow) p.size += p.grow * dt;
     p.x += p.vx * dt;
     p.y += p.vy * dt;
     p.alpha -= p.decay * dt;
@@ -2418,41 +2723,20 @@ function draw() {
     ctx.translate(dx, dy);
   }
 
-  // 1. 잔디밭 배경 드로잉 (부드러운 연두색)
-  ctx.fillStyle = '#7ED957';
-  ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+  // 1~4. 땅·도로·연석·중앙선 (구간 색이 서서히 번진다)
+  const bFrom = biomeFrom || BIOMES[0];
+  const bTo = biomeTo || BIOMES[0];
+  drawWorldGround(ctx, bFrom, bTo, biomeT, roadX, roadWidth, roadOffset, GAME_WIDTH, GAME_HEIGHT);
 
-  // 2. 도로 그리기 (다크 그레이)
-  ctx.fillStyle = '#4B5563';
-  ctx.fillRect(roadX, 0, roadWidth, GAME_HEIGHT);
+  // 5. 도로 주변 데코
+  sceneryObjects.forEach(obj => drawSceneryObj(ctx, obj));
 
-  // 3. 차선 가이드 엣지 (도로 테두리 흰색 라인)
-  ctx.fillStyle = '#FFFFFF';
-  ctx.fillRect(roadX - 4, 0, 4, GAME_HEIGHT); 
-  ctx.fillRect(roadX + roadWidth, 0, 4, GAME_HEIGHT); 
+  // 5-b. 밤 구간 어둠 (배경 층만). 게임 오브젝트는 이 위에 원래 색으로 그린다.
+  const nightAmt = bFrom.night * (1 - biomeT) + bTo.night * biomeT;
+  drawNightLayer(ctx, nightAmt, car.x, car.y, sceneryObjects, GAME_WIDTH, GAME_HEIGHT);
 
-  // 4. 가운데 움직이는 흰색 중앙 차선(점선)
-  ctx.strokeStyle = '#FFFFFF';
-  ctx.lineWidth = 4;
-  ctx.setLineDash([20, 20]); 
-  // 속도에 연동된 스크롤 오프셋
-  ctx.lineDashOffset = -roadOffset; 
-  ctx.beginPath();
-  ctx.moveTo(GAME_WIDTH / 2, 0);
-  ctx.lineTo(GAME_WIDTH / 2, GAME_HEIGHT);
-  ctx.stroke();
-  ctx.setLineDash([]); // 리셋
-
-  // 5. 도로 주변 데코 (풍차, 나무, 꽃, 구름)
-  sceneryObjects.forEach(obj => {
-    if (obj.type === 'tree') {
-      drawTree(ctx, obj.x, obj.y);
-    } else if (obj.type === 'flower') {
-      drawFlower(ctx, obj.x, obj.y);
-    } else if (obj.type === 'windmill') {
-      drawWindmill(ctx, obj.x, obj.y, obj.rot);
-    }
-  });
+  // 5-c. 최고 기록 결승선
+  if (bestLine) drawBestLine(ctx, bestLine.y, roadX, roadWidth, bestLine.passed);
 
   // 6. 웅덩이는 도로에 깔린 함정이므로 아이템/차량보다 먼저 바닥에 깔아준다
   obstacles.forEach(obs => {
@@ -2511,19 +2795,14 @@ function draw() {
     ctx.restore();
   });
 
-  // 10. 플레이어 장난감 자동차 그리기
-  drawPlayer();
+  // 10. 플레이어 장난감 자동차 그리기 (메뉴 화면에선 가운데 주인공 차가 대신한다)
+  if (gameState !== 'START') drawPlayer();
 
   // 11. 충돌 파티클 그리기
-  particles.forEach(p => {
-    ctx.save();
-    ctx.globalAlpha = p.alpha;
-    ctx.fillStyle = p.color;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  });
+  particles.forEach(p => drawParticle(ctx, p));
+
+  // 11-b. 날씨 (눈·낙엽·꽃잎·반딧불)
+  drawWeather(ctx, weatherParts);
 
   // 12. 고속 스피드라인 그리기
   if (speedLines.length > 0) {
@@ -2631,7 +2910,7 @@ function draw() {
   // 17. 일시정지 표시. 멈춘 이유가 "그림을 들여다보기 위해서"이므로
   // 화면을 가리지 않도록 위쪽에 작은 알약 하나만 얹는다.
   if (paused) {
-    const label = '⏸ 일시정지 · Space';
+    const label = '⏸ 일시정지';
     ctx.save();
     ctx.font = '900 14px "Jua", sans-serif';
     ctx.textAlign = 'center';
@@ -2650,6 +2929,108 @@ function draw() {
   }
 }
 
+// --- [시작 화면 어트랙트 모드] ---
+// 메뉴에 있는 동안에도 뒤에서 도로가 흐르고 구간이 차례로 바뀐다 (장애물은 없음).
+let attractTimer = 0;
+let attractBiome = 0;
+function updateAttract(dt) {
+  if (sceneryObjects.length === 0) {
+    biomeTo = biomeFrom = BIOMES[0];
+    biomeT = 1;
+    for (let i = 0; i < 8; i++) {
+      sceneryObjects.push({ x: randomSceneryX(), y: Math.random() * GAME_HEIGHT, type: pickSceneryType(), rot: Math.random() * Math.PI });
+    }
+  }
+  const sp = 3.2;
+  roadOffset += sp * dt;
+  sceneryObjects.forEach(obj => {
+    obj.y += sp * dt;
+    if (obj.type === 'windmill') obj.rot += 0.04 * dt;
+    else if (obj.type === 'palm') obj.rot += 0.03 * dt;
+    if (obj.y > GAME_HEIGHT + 40) {
+      obj.y = -40;
+      obj.x = randomSceneryX();
+      obj.type = pickSceneryType();
+    }
+  });
+  attractTimer += dt;
+  if (attractTimer > 420) { // 약 7초마다 다음 구간
+    attractTimer = 0;
+    attractBiome = (attractBiome + 1) % BIOMES.length;
+    biomeFrom = biomeTo;
+    biomeTo = BIOMES[attractBiome];
+    biomeT = 0;
+    weatherParts = [];
+  }
+  if (biomeT < 1) biomeT = Math.min(1, biomeT + dt / BIOME_BLEND);
+  updateWeather(dt, sp);
+}
+
+// 시작 화면 주인공 차: 통통 튀고 태엽이 돌고, 누르면 빵빵!
+const heroCanvas = document.getElementById('heroCanvas');
+const heroCtx = heroCanvas && typeof heroCanvas.getContext === 'function' ? heroCanvas.getContext('2d') : null;
+let heroJump = 0;
+let heroPuffs = [];
+function drawHero(dt) {
+  if (!heroCtx || !startScreen.classList.contains('active')) return;
+  const W = 360, H = 300, t = Date.now() / 1000;
+  heroCtx.setTransform(1, 0, 0, 1, 0, 0);
+  heroCtx.clearRect(0, 0, W, H);
+  if (heroJump > 0) heroJump = Math.max(0, heroJump - dt);
+  const jump = Math.sin((1 - heroJump / 30) * Math.PI) * (heroJump > 0 ? 38 : 0);
+  const bob = Math.abs(Math.sin(t * 7)) * 3;
+
+  // 배기 연기 퐁퐁
+  if (Math.random() < 0.25 * dt) heroPuffs.push({ x: 150 + Math.random() * 60, y: 240, r: 6, a: 0.8 });
+  heroPuffs.forEach(p => { p.y += 1.4 * dt; p.x += (p.x < 180 ? -0.5 : 0.5) * dt; p.r += 0.35 * dt; p.a -= 0.02 * dt; });
+  heroPuffs = heroPuffs.filter(p => p.a > 0);
+  heroPuffs.forEach(p => {
+    heroCtx.globalAlpha = p.a;
+    heroCtx.fillStyle = '#FFFFFF';
+    heroCtx.beginPath();
+    heroCtx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    heroCtx.fill();
+  });
+  heroCtx.globalAlpha = 1;
+
+  // 바닥 그림자 (점프하면 작아진다)
+  heroCtx.fillStyle = 'rgba(0,0,0,0.25)';
+  heroCtx.beginPath();
+  heroCtx.ellipse(180, 250, 70 - jump * 0.6, 12 - jump * 0.1, 0, 0, Math.PI * 2);
+  heroCtx.fill();
+
+  const skin = getSelectedCar();
+  heroCtx.save();
+  heroCtx.translate(180, 140 - bob - jump);
+  heroCtx.rotate(Math.sin(t * 2.2) * 0.05 + (heroJump > 0 ? Math.sin(heroJump / 3) * 0.12 : 0));
+  heroCtx.scale(2.25, 2.25);
+  drawWindKey(heroCtx, 60, skin.id === 'gold' ? '#DFE6E9' : '#FFC312', t * 6);
+  drawToyCar(heroCtx, 36, 60, {
+    body: skin.body || `hsl(${Math.floor(Date.now() / 12) % 360}, 85%, 62%)`,
+    stripe: skin.stripe || '#FFFFFF',
+    mood: 'happy',
+    look: Math.sin(t * 0.9) * 0.8,
+    blink: toyBlink(3),
+    wheelRot: t * 12
+  });
+  heroCtx.restore();
+}
+function honkHero() {
+  initAudio();
+  playSound('honk');
+  heroJump = 30;
+  buzz(25);
+}
+
+function drawCountdownOverlay() {
+  if (countdownMs <= 0) return;
+  const step = COUNTDOWN_MS / 4;
+  const idx = Math.min(3, Math.floor((COUNTDOWN_MS - countdownMs) / step));
+  const label = ['3', '2', '1', '출발!'][idx];
+  const frac = 1 - ((COUNTDOWN_MS - countdownMs) % step) / step;
+  drawCountdown(ctx, label, frac, GAME_WIDTH, GAME_HEIGHT);
+}
+
 // Delta-Time 시간 동기화 기반 루프 (모니터 주사율 60Hz~144Hz에 관계없이 똑같은 속도 보장 및 잔상 차단)
 let lastTime = (window.performance && window.performance.now) ? window.performance.now() : Date.now();
 
@@ -2665,8 +3046,22 @@ function loop(timestamp) {
   // 60FPS 기준 표준 프레임 델타값
   const dt = elapsed / 16.666;
 
-  if (!paused) update(dt);
+  if (countdownMs > 0 && gameState === 'PLAYING') {
+    const before = countdownMs;
+    countdownMs -= elapsed;
+    const step = COUNTDOWN_MS / 4;
+    // 숫자가 바뀌는 순간마다 삑 소리
+    if (Math.floor((COUNTDOWN_MS - before) / step) !== Math.floor((COUNTDOWN_MS - Math.max(0, countdownMs)) / step)) {
+      playSound(countdownMs <= step ? 'go' : 'tick');
+    }
+    if (countdownMs < 0) countdownMs = 0;
+  } else if (!paused) {
+    update(dt);
+  }
+  if (gameState === 'START') updateAttract(dt);
   draw();
+  drawHero(dt);
+  drawCountdownOverlay();
   requestAnimationFrame(loop);
 }
 
@@ -2674,21 +3069,21 @@ function loop(timestamp) {
 // PC 클릭 연동
 // startGame(daily)에 이벤트 객체가 그대로 넘어가면 truthy라 평상시 판이 도전 모드로 시작된다.
 // 다시 달리기는 방금 하던 모드를 그대로 이어 준다.
-startBtn.addEventListener('click', () => startGame(false));
-restartBtn.addEventListener('click', () => startGame(dailyRun));
+startBtn.addEventListener('click', () => beginRun(false));
+restartBtn.addEventListener('click', () => beginRun(dailyRun));
 
 // 스마트폰 모바일 터치 대응 (click 이벤트가 간헐적으로 안 받는 브라우저 완벽 보호)
 // touchstart 대신 touchend를 사용하여 확실한 사용자 제스처 이벤트로 브라우저 사운드 및 상태 변화 락 해제
 startBtn.addEventListener('touchend', (e) => {
   e.preventDefault();
   e.stopPropagation();
-  startGame(false);
+  beginRun(false);
 }, { passive: false });
 
 restartBtn.addEventListener('touchend', (e) => {
   e.preventDefault();
   e.stopPropagation();
-  startGame(dailyRun);
+  beginRun(dailyRun);
 }, { passive: false });
 
 // 기록 / 차고 / 음소거 버튼 연결 (터치 기기에서도 확실히 반응하도록 두 이벤트 모두 등록)
@@ -2714,11 +3109,70 @@ bindTap(muteBtn, () => {
   if (!save.muted) playSound('coin'); // 음소거를 풀면 소리가 살아난 걸 바로 확인시켜 준다
 });
 
-bindTap(dailyBtn, () => startGame(true));
+bindTap(dailyBtn, () => beginRun(true));
 bindTap(reviveBtn, doRevive);
+function goHome() {
+  stopBgm();
+  clearRoadForMenu();
+  gameState = 'START';
+  paused = false;
+  countdownMs = 0;
+  hidePausePanel();
+  gameOverScreen.classList.remove('active');
+  updateStartBest();
+  updateDailyInfo();
+  startScreen.classList.add('active');
+}
+
+bindTap(document.getElementById('heroCar'), honkHero);
+
+bindTap(pauseBtn, () => {
+  if (pauseBtn) pauseBtn.blur();
+  togglePause();
+});
+bindTap(document.getElementById('resumeBtn'), () => { if (paused) togglePause(); });
+bindTap(document.getElementById('pauseRestartBtn'), () => { paused = false; hidePausePanel(); beginRun(dailyRun); });
+bindTap(document.getElementById('pauseHomeBtn'), goHome);
+
+const vibeBtn = document.getElementById('vibeBtn');
+function updateVibeButton() {
+  if (!vibeBtn) return;
+  vibeBtn.textContent = save.noVibe ? '📴' : '📳';
+  vibeBtn.classList.toggle('off', !!save.noVibe);
+}
+bindTap(vibeBtn, () => {
+  save.noVibe = !save.noVibe;
+  persistSave();
+  updateVibeButton();
+  buzz(40);
+});
+
+// 시작 화면에 내 최고 기록을 띄워 첫 화면부터 목표를 보여준다
+const startBest = document.getElementById('startBest');
+function updateStartBest() {
+  if (!startBest) return;
+  if (save.best > 0) {
+    startBest.textContent = `🏆 최고 ${save.best.toLocaleString()}점 · 🪙 ${save.coins.toLocaleString()}`;
+    startBest.classList.add('visible');
+  } else {
+    startBest.classList.remove('visible');
+  }
+}
+
+function clearRoadForMenu() {
+  obstacles = [];
+  gameItems = [];
+  chaser = null;
+  screenOils = [];
+  bestLine = null;
+  floatingTexts = [];
+}
+
 bindTap(homeBtn, () => {
+  clearRoadForMenu();
   gameState = 'START';
   gameOverScreen.classList.remove('active');
+  updateStartBest();
   updateDailyInfo();
   startScreen.classList.add('active');
 });
@@ -2746,6 +3200,8 @@ document.addEventListener('visibilitychange', () => {
   if (!audioCtx) return;
 
   if (document.hidden) {
+    // 전화가 오거나 앱을 전환하면 달리던 판을 자동으로 멈춰 둔다
+    if (gameState === 'PLAYING' && !paused && countdownMs <= 0) togglePause();
     isSuspendedByVisibility = true;
     audioCtx.suspend().then(() => {
       console.log("AudioContext 일시중지 완료");
@@ -2760,6 +3216,9 @@ document.addEventListener('visibilitychange', () => {
 
 resizeCanvas();
 updateMuteButton();
+updateVibeButton();
+updateStartBest();
+// 조작법은 접어 두어 '게임 시작하기' 버튼이 어떤 폰에서도 첫 화면에 보이게 한다
 updateDailyInfo();
 window.addEventListener('resize', resizeCanvas);
 loop((window.performance && window.performance.now) ? window.performance.now() : Date.now());

@@ -25,6 +25,7 @@
         <span id="scoreVal" class="hud-value">0</span>
         <span id="levelVal" class="hud-level">LV.1</span>
       </div>
+      <button id="pauseBtn" class="pause-btn" aria-label="일시정지">❚❚</button>
       <div class="hud-item life-container">
         <div id="heartContainer">
           <span class="heart">❤️</span>
@@ -64,15 +65,52 @@
       </div>
     </div>
 
-    <!-- 1. 시작 화면 -->
-    <div id="startScreen" class="overlay-screen active">
-      <div class="screen-content">
-        <div class="logo-area">
-          <span class="emoji-logo">🚗</span>
-          <h1 class="game-title">부릉부릉 토이카!</h1>
+    <!-- 구간 이름 배너 (레벨업 때 잠깐 등장) -->
+    <div id="zoneBanner" aria-live="polite">
+      <span class="zone-title"></span>
+      <span class="zone-sub"></span>
+    </div>
+
+    <!-- 일시정지 패널: 화면 아래쪽에만 얹어 멈춘 장면을 가리지 않는다 -->
+    <div id="pausePanel">
+      <button id="resumeBtn" class="btn-primary">▶ 계속 달리기</button>
+      <div class="btn-row">
+        <button id="pauseRestartBtn" class="btn-secondary">🔄 처음부터</button>
+        <button id="pauseHomeBtn" class="btn-secondary">🏠 메뉴</button>
+      </div>
+    </div>
+
+    <!-- 1. 시작 화면: 뒤에서 도로가 계속 흐르고(어트랙트 모드), 장난감 블록 제목이 쌓인다 -->
+    <div id="startScreen" class="overlay-screen active title-screen">
+      <div class="title-wrap">
+        <h1 class="title-blocks" aria-label="부릉부릉 토이카 런">
+          <span class="tb-row tb-small" aria-hidden="true">
+            <span class="tb c-red" style="--i:0">부</span><span class="tb c-blue" style="--i:1">릉</span><span class="tb c-green" style="--i:2">부</span><span class="tb c-purple" style="--i:3">릉</span>
+          </span>
+          <span class="tb-row tb-big" aria-hidden="true">
+            <span class="tb c-yellow" style="--i:4">토</span><span class="tb c-red" style="--i:5">이</span><span class="tb c-blue" style="--i:6">카</span>
+          </span>
+          <span class="tb-run" aria-hidden="true">RUN!</span>
+        </h1>
+
+        <button id="heroCar" class="hero-car" aria-label="빵빵! 차를 눌러 보세요">
+          <canvas id="heroCanvas" width="360" height="300"></canvas>
+        </button>
+
+        <p id="startBest" class="start-best"></p>
+
+        <button id="startBtn" class="btn-primary btn-go">태엽 감고 출발!</button>
+        <button id="dailyBtn" class="btn-secondary btn-daily">🗓️ 오늘의 도전</button>
+        <p id="dailyInfo" class="daily-info"></p>
+        <div class="btn-row">
+          <button id="statsBtn" class="btn-secondary">🏆 기록</button>
+          <button id="garageBtn" class="btn-secondary">🚗 차고</button>
+          <button id="muteBtn" class="btn-secondary btn-icon" aria-label="소리 켜기/끄기">🔊</button>
+          <button id="vibeBtn" class="btn-secondary btn-icon" aria-label="진동 켜기/끄기">📳</button>
         </div>
-        <p class="game-subtitle">장애물을 피해 더 멀리 달려봐요!</p>
-        
+
+        <details id="howto" class="howto">
+        <summary>🎮 조작법 &amp; 규칙</summary>
         <div class="instructions-box">
           <p>⌨️ <strong>PC 조작:</strong> 방향키 ◀ ▶ 또는 A / D</p>
           <p>📱 <strong>모바일:</strong> 화면 아래 왼쪽 / 오른쪽을 누르기</p>
@@ -80,18 +118,12 @@
           <p>🚪 <strong>게이트:</strong> 황금 문은 코인 2배, 대신 그 뒤가 험난!</p>
           <p>🚸 <strong>조심!</strong> 길 건너는 사람·동물을 치면 경찰이 쫓아와요</p>
           <p>🚓 <strong>추격전:</strong> 15초 버티면 탈출! 장애물로 유인하면 주춤해요</p>
-          <p>⏸️ <strong>일시정지:</strong> 달리는 중 Space</p>
+          <p>⏸️ <strong>일시정지:</strong> 달리는 중 Space 또는 위쪽 ⏸ 버튼</p>
           <p>🔄 <strong>바로 재시작:</strong> Space 또는 Enter</p>
+          <p>🗺️ <strong>구간:</strong> 레벨마다 포도밭·단풍길·바닷가·밤거리·설원으로!</p>
+          <p>🏁 <strong>결승선:</strong> 내 최고 거리에 체크무늬 선이 깔려요</p>
         </div>
-
-        <button id="startBtn" class="btn-primary">게임 시작하기!</button>
-        <button id="dailyBtn" class="btn-secondary btn-daily">🗓️ 오늘의 도전</button>
-        <p id="dailyInfo" class="daily-info"></p>
-        <div class="btn-row">
-          <button id="statsBtn" class="btn-secondary">🏆 기록</button>
-          <button id="garageBtn" class="btn-secondary">🚗 차고</button>
-          <button id="muteBtn" class="btn-secondary btn-icon" aria-label="소리 켜기/끄기">🔊</button>
-        </div>
+        </details>
       </div>
     </div>
 
